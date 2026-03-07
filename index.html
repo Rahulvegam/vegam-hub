@@ -606,11 +606,18 @@ tr:hover td{background:var(--s2);color:var(--t1);}
       <!-- TEAMS -->
       <div class="sec" id="s-teams">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem">
-          <div><div style="font-size:1rem;font-weight:800;letter-spacing:-.4px">Teams</div><div style="font-size:.76rem;color:var(--t2);margin-top:.15rem">Group members for focused views</div></div>
+          <div>
+            <div style="display:flex;align-items:center;gap:.6rem">
+              <div style="font-size:1rem;font-weight:800;letter-spacing:-.4px">Teams</div>
+              <span id="teams-sync-badge" style="display:none;font-size:.64rem;font-family:'JetBrains Mono',monospace;padding:.15rem .55rem;border-radius:20px;background:rgba(99,102,241,.12);color:var(--a)">syncing…</span>
+              <span id="teams-saved-badge" style="display:none;font-size:.64rem;font-family:'JetBrains Mono',monospace;padding:.15rem .55rem;border-radius:20px;background:rgba(16,185,129,.12);color:var(--ok)">✓ synced</span>
+            </div>
+            <div style="font-size:.76rem;color:var(--t2);margin-top:.15rem">Shared across all users · saved to cloud</div>
+          </div>
           <button class="btn btn-p btn-sm" onclick="openModal()">+ New Team</button>
         </div>
         <div class="tgrid" id="t-grid"></div>
-        <div id="t-empty" class="empty" style="display:none"><div class="empty-ico">👥</div>No teams yet</div>
+        <div id="t-empty" class="empty" style="display:none"><div class="empty-ico">👥</div>No teams yet — create one to get started</div>
       </div>
 
     </div>
@@ -819,6 +826,8 @@ async function launchApp(){
   document.getElementById('app').style.display='flex';
   document.getElementById('sb-url').textContent=S.url.replace('https://','');
   setLoadingDash();
+  // Load shared teams from KV (merges with localStorage cache as fallback)
+  await loadTeamsFromKV();
   renderTeamNav();renderDashTabs();renderTeamsGrid();
   await loadAll();
   renderApp();
@@ -1412,7 +1421,54 @@ function saveTeam(){
   else S.teams.push({id:Date.now(),name,color:S.selColor,members});
   saveTeams();closeModal();renderApp();
 }
-function saveTeams(){localStorage.setItem('vg_teams',JSON.stringify(S.teams));}
+// ── TEAMS — KV-backed shared storage ─────────
+const TEAMS_SYNC_DEBOUNCE=500;
+let _teamsSaveTimer=null;
+
+function showSyncBadge(state){
+  const syncing=document.getElementById('teams-sync-badge');
+  const synced=document.getElementById('teams-saved-badge');
+  if(!syncing||!synced)return;
+  if(state==='syncing'){syncing.style.display='inline';synced.style.display='none';}
+  else if(state==='synced'){syncing.style.display='none';synced.style.display='inline';setTimeout(()=>{synced.style.display='none';},3000);}
+  else{syncing.style.display='none';synced.style.display='none';}
+}
+
+async function loadTeamsFromKV(){
+  try{
+    const r=await fetch(`${PROXY}?action=getTeams`);
+    if(!r.ok)throw new Error('KV fetch failed');
+    const d=await r.json();
+    if(Array.isArray(d.teams)&&d.teams.length){
+      S.teams=d.teams;
+      localStorage.setItem('vg_teams',JSON.stringify(S.teams));
+    }
+  }catch(e){
+    console.warn('KV teams unavailable, using local cache',e.message);
+  }
+}
+
+function saveTeams(){
+  // Save to localStorage immediately (instant local backup)
+  localStorage.setItem('vg_teams',JSON.stringify(S.teams));
+  showSyncBadge('syncing');
+  // Debounce KV save so rapid edits don't spam the worker
+  clearTimeout(_teamsSaveTimer);
+  _teamsSaveTimer=setTimeout(async()=>{
+    try{
+      const r=await fetch(`${PROXY}?action=saveTeams`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({teams:S.teams})
+      });
+      if(r.ok)showSyncBadge('synced');
+      else showSyncBadge('');
+    }catch(e){
+      showSyncBadge('');
+      console.warn('KV save failed, teams saved locally only',e.message);
+    }
+  },TEAMS_SYNC_DEBOUNCE);
+}
 
 // ── DISCONNECT ────────────────────────────────
 function doDisconnect(){
