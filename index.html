@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Vegam · Team Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --border: #2a2a3a;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --accent3: #43e97b;
+    --accent4: #f7971e;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+    --danger: #ff4757;
+    --warning: #ffa502;
+    --success: #2ed573;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── CONNECT SCREEN ── */
+  #connect-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: radial-gradient(ellipse at 20% 50%, #1a1040 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, #0d2040 0%, transparent 50%),
+                var(--bg);
+  }
+  .connect-card {
+    width: 100%;
+    max-width: 460px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3rem;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.5);
+  }
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -1px;
+    margin-bottom: 0.3rem;
+  }
+  .logo span { color: var(--text); }
+  .tagline { color: var(--muted); font-size: 0.85rem; margin-bottom: 2.5rem; }
+  label { display: block; font-size: 0.75rem; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+  input[type=text], input[type=password], select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    padding: 0.75rem 1rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 1.2rem;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  select option { background: var(--surface2); }
+  .btn {
+    width: 100%;
+    padding: 0.85rem;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #5a52e0; transform: translateY(-1px); }
+  .btn-sm {
+    width: auto;
+    padding: 0.5rem 1.2rem;
+    font-size: 0.8rem;
+    border-radius: 8px;
+  }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: #e63946; }
+  .btn-success { background: var(--success); color: #000; }
+  .error-msg { color: var(--danger); font-size: 0.8rem; margin-top: -0.8rem; margin-bottom: 1rem; }
+
+  /* ── APP SHELL ── */
+  #app { display: none; }
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: 240px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    transition: transform 0.3s;
+  }
+  .sidebar-logo {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Syne', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--accent);
+  }
+  .sidebar-logo span { color: var(--text); }
+  .nav-section { padding: 1rem 0.75rem 0; }
+  .nav-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); padding: 0 0.75rem; margin-bottom: 0.5rem; }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--muted);
+    transition: all 0.15s;
+    margin-bottom: 2px;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: rgba(108,99,255,0.15); color: var(--accent); }
+  .nav-item .icon { font-size: 1rem; width: 20px; text-align: center; }
+  .team-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .sidebar-bottom {
+    margin-top: auto;
+    padding: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .sidebar-bottom strong { color: var(--text); display: block; margin-bottom: 2px; }
+  .main {
+    margin-left: 240px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .topbar {
+    padding: 1.2rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .page-title { font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 700; }
+  .topbar-actions { display: flex; gap: 0.75rem; align-items: center; }
+  .content { padding: 2rem; flex: 1; }
+
+  /* ── SECTIONS ── */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* ── TEAM MANAGER ── */
+  .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.2rem; margin-bottom: 2rem; }
+  .team-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .team-card:hover { border-color: var(--accent); }
+  .team-card-accent { position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .team-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+  .team-name { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 700; }
+  .team-actions { display: flex; gap: 0.5rem; }
+  .member-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    width: 100%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    transform: translateY(20px);
+    transition: transform 0.2s;
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-title { font-family: 'Syne', sans-serif; font-size: 1.2rem; font-weight: 700; margin-bottom: 1.5rem; }
+  .modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+  .member-list { max-height: 300px; overflow-y: auto; }
+  .member-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .member-row:last-child { border-bottom: none; }
+  .member-row input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+  .avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+  }
+  .member-info .name { font-size: 0.88rem; }
+  .member-info .email { font-size: 0.75rem; color: var(--muted); }
+
+  /* ── DASHBOARD ── */
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.4rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: -20px; right: -20px;
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    opacity: 0.08;
+  }
+  .stat-card.purple::before { background: var(--accent); }
+  .stat-card.red::before { background: var(--danger); }
+  .stat-card.green::before { background: var(--success); }
+  .stat-card.orange::before { background: var(--warning); }
+  .stat-card.blue::before { background: #00d2ff; }
+  .stat-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 0.5rem; }
+  .stat-value { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; }
+  .stat-card.purple .stat-value { color: var(--accent); }
+  .stat-card.red .stat-value { color: var(--danger); }
+  .stat-card.green .stat-value { color: var(--success); }
+  .stat-card.orange .stat-value { color: var(--warning); }
+  .stat-card.blue .stat-value { color: #00d2ff; }
+
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-bottom: 2rem; }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+  }
+  .chart-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; margin-bottom: 1.2rem; }
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* ── ISSUES TABLE ── */
+  .filter-row { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center; }
+  .filter-row input[type=text], .filter-row select {
+    margin-bottom: 0;
+    width: auto;
+    flex: 1;
+    min-width: 150px;
+  }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-new { background: rgba(108,99,255,0.2); color: var(--accent); }
+  .badge-progress { background: rgba(247,151,30,0.2); color: var(--accent4); }
+  .badge-resolved { background: rgba(67,233,123,0.2); color: var(--accent3); }
+  .badge-closed { background: rgba(107,107,138,0.2); color: var(--muted); }
+  .badge-rejected { background: rgba(255,71,87,0.2); color: var(--danger); }
+  .badge-feedback { background: rgba(0,210,255,0.2); color: #00d2ff; }
+  .priority-high { color: var(--danger); font-weight: 600; }
+  .priority-normal { color: var(--text); }
+  .priority-low { color: var(--muted); }
+  .overdue-row td { background: rgba(255,71,87,0.04); }
+  .overdue-badge { background: rgba(255,71,87,0.15); color: var(--danger); border-radius: 4px; padding: 1px 5px; font-size: 0.7rem; margin-left: 4px; }
+
+  /* ── LOADING / EMPTY ── */
+  .loading { text-align: center; padding: 3rem; color: var(--muted); }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 1rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty { text-align: center; padding: 3rem; color: var(--muted); font-size: 0.9rem; }
+  .empty .icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+
+  /* ── COLOR PICKER ── */
+  .color-swatches { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .swatch {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.15s;
+  }
+  .swatch:hover { transform: scale(1.2); }
+  .swatch.selected { border-color: #fff; transform: scale(1.15); }
+
+  /* ── REFRESH BTN ── */
+  .refresh-info { font-size: 0.75rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+  /* ── TEAM SELECTOR (dashboard) ── */
+  .team-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 2rem; }
+  .team-tab {
+    padding: 0.5rem 1.2rem;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--muted);
+  }
+  .team-tab:hover { border-color: var(--accent); color: var(--text); }
+  .team-tab.active { color: #fff; border-color: transparent; }
+
+  /* ── MOBILE ── */
+  .hamburger { display: none; background: none; border: none; color: var(--text); font-size: 1.4rem; cursor: pointer; }
+  @media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.open { transform: translateX(0); }
+    .main { margin-left: 0; }
+    .hamburger { display: block; }
+    .charts-row { grid-template-columns: 1fr; }
+    .content { padding: 1rem; }
+    .topbar { padding: 1rem; }
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90; display: none; }
+    .overlay.open { display: block; }
+  }
+</style>
+</head>
+<body>
+
+<!-- CONNECT SCREEN -->
+<div id="connect-screen">
+  <div class="connect-card">
+    <div class="logo">Vegam<span>·</span>Hub</div>
+    <div class="tagline">Team Dashboard powered by Redmine</div>
+    <label>Redmine URL</label>
+    <input type="text" id="rm-url" value="https://support.vegam.co" placeholder="https://your-redmine.com"/>
+    <label>API Key</label>
+    <input type="password" id="rm-key" value="208d0767066bd32bf161c327f1ac3c1bfbbeabe4" placeholder="Your API access key"/>
+    <div id="connect-error" class="error-msg" style="display:none"></div>
+    <button class="btn btn-primary" onclick="connectRedmine()">Connect to Redmine →</button>
+  </div>
+</div>
+
+<!-- SIDEBAR OVERLAY (mobile) -->
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<!-- APP -->
+<div id="app">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-logo">Vegam<span>·</span>Hub</div>
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item active" onclick="showSection('dashboard')">
+        <span class="icon">📊</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showSection('issues')">
+        <span class="icon">📋</span> All Issues
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Teams</div>
+      <div id="team-nav-items"></div>
+      <div class="nav-item" onclick="showSection('teams')">
+        <span class="icon">➕</span> Manage Teams
+      </div>
+    </div>
+    <div class="sidebar-bottom">
+      <strong id="sb-url"></strong>
+      <span id="sb-lastrefresh"></span>
+      <br/><a href="#" onclick="disconnect()" style="color:var(--muted);font-size:0.75rem;text-decoration:none;">Disconnect</a>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:1rem">
+        <button class="hamburger" onclick="openSidebar()">☰</button>
+        <div class="page-title" id="page-title">Dashboard</div>
+      </div>
+      <div class="topbar-actions">
+        <span class="refresh-info" id="last-refresh-label"></span>
+        <button class="btn btn-outline btn-sm" onclick="refreshData()">⟳ Refresh</button>
+      </div>
+    </div>
+    <div class="content">
+
+      <!-- DASHBOARD SECTION -->
+      <div class="section active" id="section-dashboard">
+        <div class="team-tabs" id="dash-team-tabs"></div>
+        <div id="dash-content">
+          <div class="loading"><div class="spinner"></div>Loading data…</div>
+        </div>
+      </div>
+
+      <!-- ALL ISSUES SECTION -->
+      <div class="section" id="section-issues">
+        <div class="filter-row">
+          <input type="text" id="issue-search" placeholder="Search issues…" oninput="renderIssuesTable()"/>
+          <select id="issue-status-filter" onchange="renderIssuesTable()">
+            <option value="">All Statuses</option>
+          </select>
+          <select id="issue-team-filter" onchange="renderIssuesTable()">
+            <option value="">All Teams</option>
+          </select>
+          <select id="issue-priority-filter" onchange="renderIssuesTable()">
+            <option value="">All Priorities</option>
+            <option value="High">High</option>
+            <option value="Normal">Normal</option>
+            <option value="Low">Low</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Title</th>
+                <th>Project</th>
+                <th>Assignee</th>
+                <th>Team</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Due Date</th>
+              </tr>
+            </thead>
+            <tbody id="issues-tbody"></tbody>
+          </table>
+        </div>
+        <div id="issues-empty" class="empty" style="display:none">
+          <div class="icon">📭</div>
+          No issues found for the selected filters.
+        </div>
+      </div>
+
+      <!-- TEAMS SECTION -->
+      <div class="section" id="section-teams">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+          <div style="color:var(--muted);font-size:0.88rem">Create teams by grouping Redmine members. Dashboards are generated per team.</div>
+          <button class="btn btn-primary btn-sm" onclick="openTeamModal()">+ New Team</button>
+        </div>
+        <div class="team-grid" id="teams-grid"></div>
+        <div id="teams-empty" class="empty" style="display:none">
+          <div class="icon">👥</div>
+          No teams yet. Create your first team!
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- TEAM MODAL -->
+<div class="modal-overlay" id="team-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title-text">Create Team</div>
+    <label>Team Name</label>
+    <input type="text" id="team-name-input" placeholder="e.g. Frontend Squad"/>
+    <label>Team Color</label>
+    <div class="color-swatches" id="color-swatches"></div>
+    <label>Select Members</label>
+    <input type="text" id="member-search" placeholder="Search members…" oninput="filterMemberList()"/>
+    <div class="member-list" id="member-list"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeTeamModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveTeam()">Save Team</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let state = {
+  url: '', key: '',
+  users: [],
+  issues: [],
+  teams: JSON.parse(localStorage.getItem('vhub_teams') || '[]'),
+  projects: [],
+  currentTeam: 'all',
+  editingTeamId: null,
+  selectedColor: '#6c63ff',
+  selectedMembers: new Set(),
+  lastRefresh: null,
+};
+
+const COLORS = ['#6c63ff','#ff6584','#43e97b','#f7971e','#00d2ff','#a29bfe','#fd79a8','#00b894','#fdcb6e','#e17055'];
+
+// ── CONNECT ──
+async function connectRedmine() {
+  const url = document.getElementById('rm-url').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('rm-key').value.trim();
+  const errEl = document.getElementById('connect-error');
+  errEl.style.display = 'none';
+
+  if (!url || !key) { errEl.textContent = 'Please fill in all fields.'; errEl.style.display = 'block'; return; }
+
+  state.url = url; state.key = key;
+
+  try {
+    // Test connection by fetching current user
+    const res = await rmFetch('/users/current.json');
+    if (!res || !res.user) throw new Error('Invalid response');
+    await loadAllData();
+    document.getElementById('connect-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('sb-url').textContent = url.replace('https://','');
+    renderApp();
+  } catch(e) {
+    errEl.textContent = 'Connection failed: ' + (e.message || 'Check URL and API key.');
+    errEl.style.display = 'block';
+  }
+}
+
+function disconnect() {
+  document.getElementById('connect-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  state.url = ''; state.key = '';
+}
+
+// ── REDMINE API (via Cloudflare proxy to bypass CORS) ──
+const PROXY = 'https://vegam-redmine-proxy.rahul-68b.workers.dev';
+
+async function rmFetch(path, params = {}) {
+  const targetParams = new URLSearchParams({ ...params, key: state.key }).toString();
+  const target = encodeURIComponent(`${path}?${targetParams}`);
+  const res = await fetch(`${PROXY}?target=${target}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchAllIssues() {
+  let all = [], offset = 0, limit = 100, total = Infinity;
+  while (all.length < total) {
+    const data = await rmFetch('/issues.json', { offset, limit, status_id: 'o', assigned_to_id: '' });
+    // fetch all statuses
+    const data2 = await rmFetch('/issues.json', { offset, limit });
+    total = data2.total_count;
+    if (!data2.issues.length) break;
+    all = all.concat(data2.issues);
+    offset += limit;
+    if (offset >= total) break;
+  }
+  return all;
+}
+
+async function loadAllData() {
+  // Load users (admin endpoint)
+  try {
+    const uData = await rmFetch('/users.json', { status: 1, limit: 100 });
+    state.users = uData.users || [];
+  } catch(e) {
+    // fallback: extract from issues
+    state.users = [];
+  }
+
+  // Load issues
+  let allIssues = [], offset = 0, limit = 100;
+  let total = Infinity;
+  while (allIssues.length < total) {
+    try {
+      const data = await rmFetch('/issues.json', { offset, limit, status_id: '*' });
+      total = data.total_count || 0;
+      if (!data.issues || !data.issues.length) break;
+      allIssues = allIssues.concat(data.issues);
+      offset += limit;
+      if (offset >= total) break;
+    } catch(e) { break; }
+  }
+  state.issues = allIssues;
+
+  // Extract unique assignees if users endpoint failed
+  if (!state.users.length) {
+    const seen = new Map();
+    allIssues.forEach(i => {
+      if (i.assigned_to && !seen.has(i.assigned_to.id)) {
+        seen.set(i.assigned_to.id, { id: i.assigned_to.id, login: i.assigned_to.name, firstname: i.assigned_to.name, lastname: '', mail: '' });
+      }
+    });
+    state.users = Array.from(seen.values());
+  }
+
+  // Load projects
+  try {
+    const pData = await rmFetch('/projects.json', { limit: 100 });
+    state.projects = pData.projects || [];
+  } catch(e) { state.projects = []; }
+
+  state.lastRefresh = new Date();
+  updateLastRefreshLabel();
+}
+
+async function refreshData() {
+  const btn = document.querySelector('.topbar-actions .btn');
+  btn.textContent = '⟳ Refreshing…';
+  btn.disabled = true;
+  await loadAllData();
+  renderApp();
+  btn.textContent = '⟳ Refresh';
+  btn.disabled = false;
+}
+
+function updateLastRefreshLabel() {
+  if (!state.lastRefresh) return;
+  const t = state.lastRefresh;
+  document.getElementById('last-refresh-label').textContent =
+    `Updated ${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')}`;
+  document.getElementById('sb-lastrefresh').textContent =
+    `Last sync: ${t.toLocaleTimeString()}`;
+}
+
+// ── RENDER APP ──
+function renderApp() {
+  renderTeamNav();
+  renderDashTeamTabs();
+  renderDashboard();
+  renderIssuesFilters();
+  renderIssuesTable();
+  renderTeamsGrid();
+}
+
+// ── NAVIGATION ──
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('section-' + name).classList.add('active');
+  const titles = { dashboard: 'Dashboard', issues: 'All Issues', teams: 'Manage Teams' };
+  document.getElementById('page-title').textContent = titles[name] || name;
+  closeSidebar();
+}
+
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+// ── TEAM NAV ──
+function renderTeamNav() {
+  const el = document.getElementById('team-nav-items');
+  el.innerHTML = state.teams.map(t => `
+    <div class="nav-item" onclick="selectTeamDash('${t.id}');showSection('dashboard')">
+      <span class="team-dot" style="background:${t.color}"></span>
+      ${t.name}
+    </div>
+  `).join('');
+}
+
+// ── DASHBOARD ──
+function renderDashTeamTabs() {
+  const el = document.getElementById('dash-team-tabs');
+  const tabs = [{ id: 'all', name: 'All Teams', color: '#6c63ff' }, ...state.teams];
+  el.innerHTML = tabs.map(t => `
+    <div class="team-tab ${state.currentTeam === t.id ? 'active' : ''}"
+         style="${state.currentTeam === t.id ? `background:${t.color}` : ''}"
+         onclick="selectTeamDash('${t.id}')">
+      <span style="width:8px;height:8px;border-radius:50%;background:${state.currentTeam===t.id?'rgba(255,255,255,0.6)':t.color};display:inline-block"></span>
+      ${t.name}
+    </div>
+  `).join('');
+}
+
+function selectTeamDash(teamId) {
+  state.currentTeam = teamId;
+  renderDashTeamTabs();
+  renderDashboard();
+}
+
+function getTeamIssues(teamId) {
+  if (teamId === 'all') return state.issues;
+  const team = state.teams.find(t => t.id == teamId);
+  if (!team) return state.issues;
+  const memberIds = new Set(team.members.map(m => m.id));
+  return state.issues.filter(i => i.assigned_to && memberIds.has(i.assigned_to.id));
+}
+
+function renderDashboard() {
+  const issues = getTeamIssues(state.currentTeam);
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // Stats
+  const total = issues.length;
+  const open = issues.filter(i => !['Closed','Rejected'].includes(i.status?.name)).length;
+  const inProgress = issues.filter(i => i.status?.name === 'In Progress').length;
+  const resolved = issues.filter(i => ['Resolved','Closed'].includes(i.status?.name)).length;
+  const overdue = issues.filter(i => {
+    if (!i.due_date) return false;
+    const due = new Date(i.due_date);
+    return due < today && !['Closed','Rejected'].includes(i.status?.name);
+  }).length;
+
+  // Status breakdown
+  const statusMap = {};
+  issues.forEach(i => {
+    const s = i.status?.name || 'Unknown';
+    statusMap[s] = (statusMap[s] || 0) + 1;
+  });
+
+  // Member workload
+  const memberMap = {};
+  issues.forEach(i => {
+    if (!i.assigned_to) return;
+    const n = i.assigned_to.name;
+    memberMap[n] = (memberMap[n] || 0) + 1;
+  });
+
+  // Priority breakdown
+  const prioMap = {};
+  issues.forEach(i => {
+    const p = i.priority?.name || 'Normal';
+    prioMap[p] = (prioMap[p] || 0) + 1;
+  });
+
+  const html = `
+    <div class="stats-row">
+      <div class="stat-card purple">
+        <div class="stat-label">Total Issues</div>
+        <div class="stat-value">${total}</div>
+      </div>
+      <div class="stat-card orange">
+        <div class="stat-label">Open</div>
+        <div class="stat-value">${open}</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">In Progress</div>
+        <div class="stat-value">${inProgress}</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">Resolved</div>
+        <div class="stat-value">${resolved}</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">Overdue</div>
+        <div class="stat-value">${overdue}</div>
+      </div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Status Breakdown</div>
+        <div class="chart-wrap"><canvas id="chart-status"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Member Workload</div>
+        <div class="chart-wrap"><canvas id="chart-workload"></canvas></div>
+      </div>
+    </div>
+    ${overdue > 0 ? `
+    <div class="chart-card" style="margin-bottom:1.5rem">
+      <div class="chart-title" style="color:var(--danger)">⚠ Overdue Issues (${overdue})</div>
+      <div class="table-wrap" style="margin-top:0.5rem">
+        <table>
+          <thead><tr><th>#</th><th>Title</th><th>Assignee</th><th>Due Date</th><th>Status</th></tr></thead>
+          <tbody>
+            ${issues.filter(i => {
+              if (!i.due_date) return false;
+              const due = new Date(i.due_date);
+              return due < today && !['Closed','Rejected'].includes(i.status?.name);
+            }).map(i => `
+              <tr class="overdue-row">
+                <td><a href="${state.url}/issues/${i.id}" target="_blank" style="color:var(--accent);text-decoration:none">#${i.id}</a></td>
+                <td>${i.subject}</td>
+                <td>${i.assigned_to?.name || '—'}</td>
+                <td style="color:var(--danger)">${i.due_date}</td>
+                <td>${statusBadge(i.status?.name)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+  `;
+
+  document.getElementById('dash-content').innerHTML = html;
+
+  // Chart: Status
+  setTimeout(() => {
+    const statusCtx = document.getElementById('chart-status');
+    if (statusCtx) {
+      new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(statusMap),
+          datasets: [{ data: Object.values(statusMap),
+            backgroundColor: ['#6c63ff','#f7971e','#43e97b','#6b6b8a','#ff4757','#00d2ff'],
+            borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#e8e8f0', font: { family: 'DM Sans' } } } } }
+      });
+    }
+    const wlCtx = document.getElementById('chart-workload');
+    if (wlCtx) {
+      const sorted = Object.entries(memberMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+      new Chart(wlCtx, {
+        type: 'bar',
+        data: {
+          labels: sorted.map(([n]) => n.split(' ')[0]),
+          datasets: [{ label: 'Issues', data: sorted.map(([,v])=>v),
+            backgroundColor: '#6c63ff88', borderColor: '#6c63ff', borderWidth: 1, borderRadius: 6 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#6b6b8a' }, grid: { color: '#2a2a3a' } },
+            y: { ticks: { color: '#e8e8f0' }, grid: { display: false } }
+          }
+        }
+      });
+    }
+  }, 50);
+}
+
+// ── ISSUES TABLE ──
+function renderIssuesFilters() {
+  // Status filter
+  const statuses = [...new Set(state.issues.map(i => i.status?.name).filter(Boolean))];
+  const sf = document.getElementById('issue-status-filter');
+  sf.innerHTML = '<option value="">All Statuses</option>' + statuses.map(s => `<option value="${s}">${s}</option>`).join('');
+
+  // Team filter
+  const tf = document.getElementById('issue-team-filter');
+  tf.innerHTML = '<option value="">All Teams</option>' + state.teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+}
+
+function renderIssuesTable() {
+  const search = document.getElementById('issue-search').value.toLowerCase();
+  const statusF = document.getElementById('issue-status-filter').value;
+  const teamF = document.getElementById('issue-team-filter').value;
+  const prioF = document.getElementById('issue-priority-filter').value;
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  let filtered = state.issues.filter(i => {
+    if (search && !i.subject.toLowerCase().includes(search) && !String(i.id).includes(search)) return false;
+    if (statusF && i.status?.name !== statusF) return false;
+    if (prioF && i.priority?.name !== prioF) return false;
+    if (teamF) {
+      const team = state.teams.find(t => t.id == teamF);
+      if (!team) return false;
+      const memberIds = new Set(team.members.map(m => m.id));
+      if (!i.assigned_to || !memberIds.has(i.assigned_to.id)) return false;
+    }
+    return true;
+  });
+
+  const tbody = document.getElementById('issues-tbody');
+  const empty = document.getElementById('issues-empty');
+
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Find team for each issue
+  function issueTeam(issue) {
+    if (!issue.assigned_to) return null;
+    return state.teams.find(t => t.members.some(m => m.id === issue.assigned_to.id));
+  }
+
+  tbody.innerHTML = filtered.map(i => {
+    const due = i.due_date ? new Date(i.due_date) : null;
+    const isOverdue = due && due < today && !['Closed','Rejected'].includes(i.status?.name);
+    const team = issueTeam(i);
+    return `<tr class="${isOverdue ? 'overdue-row' : ''}">
+      <td><a href="${state.url}/issues/${i.id}" target="_blank" style="color:var(--accent);text-decoration:none;font-family:'DM Mono',monospace;font-size:0.8rem">#${i.id}</a></td>
+      <td>${i.subject}${isOverdue ? '<span class="overdue-badge">OVERDUE</span>' : ''}</td>
+      <td style="color:var(--muted);font-size:0.8rem">${i.project?.name || '—'}</td>
+      <td>${i.assigned_to?.name || '<span style="color:var(--muted)">Unassigned</span>'}</td>
+      <td>${team ? `<span class="chip" style="border-color:${team.color};color:${team.color}">${team.name}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${statusBadge(i.status?.name)}</td>
+      <td class="${prioCls(i.priority?.name)}">${i.priority?.name || '—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:0.8rem;${isOverdue?'color:var(--danger)':''}">${i.due_date || '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function statusBadge(s) {
+  const map = { 'New': 'badge-new', 'In Progress': 'badge-progress', 'Resolved': 'badge-resolved', 'Closed': 'badge-closed', 'Rejected': 'badge-rejected', 'Feedback': 'badge-feedback' };
+  return `<span class="badge ${map[s] || 'badge-new'}">${s || 'Unknown'}</span>`;
+}
+function prioCls(p) {
+  if (p === 'High' || p === 'Urgent' || p === 'Immediate') return 'priority-high';
+  if (p === 'Low') return 'priority-low';
+  return 'priority-normal';
+}
+
+// ── TEAMS GRID ──
+function renderTeamsGrid() {
+  const el = document.getElementById('teams-grid');
+  const empty = document.getElementById('teams-empty');
+  if (!state.teams.length) { el.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  el.innerHTML = state.teams.map(t => `
+    <div class="team-card">
+      <div class="team-card-accent" style="background:${t.color}"></div>
+      <div class="team-card-header">
+        <div class="team-name">${t.name}</div>
+        <div class="team-actions">
+          <button class="btn btn-outline btn-sm" onclick="editTeam('${t.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteTeam('${t.id}')">✕</button>
+        </div>
+      </div>
+      <div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.75rem">${t.members.length} member${t.members.length!==1?'s':''}</div>
+      <div class="member-chips">
+        ${t.members.map(m => `<span class="chip">${m.name}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── TEAM MODAL ──
+function openTeamModal(editId = null) {
+  state.editingTeamId = editId;
+  state.selectedColor = '#6c63ff';
+  state.selectedMembers = new Set();
+
+  if (editId) {
+    const team = state.teams.find(t => t.id == editId);
+    if (team) {
+      document.getElementById('team-name-input').value = team.name;
+      state.selectedColor = team.color;
+      team.members.forEach(m => state.selectedMembers.add(m.id));
+      document.getElementById('modal-title-text').textContent = 'Edit Team';
+    }
+  } else {
+    document.getElementById('team-name-input').value = '';
+    document.getElementById('modal-title-text').textContent = 'Create Team';
+  }
+
+  renderColorSwatches();
+  renderMemberList();
+  document.getElementById('member-search').value = '';
+  document.getElementById('team-modal').classList.add('open');
+}
+
+function closeTeamModal() {
+  document.getElementById('team-modal').classList.remove('open');
+}
+
+function editTeam(id) { openTeamModal(id); }
+function deleteTeam(id) {
+  if (!confirm('Delete this team?')) return;
+  state.teams = state.teams.filter(t => t.id != id);
+  saveTeams();
+  renderApp();
+}
+
+function renderColorSwatches() {
+  const el = document.getElementById('color-swatches');
+  el.innerHTML = COLORS.map(c => `
+    <div class="swatch ${c === state.selectedColor ? 'selected' : ''}"
+         style="background:${c}"
+         onclick="selectColor('${c}')"></div>
+  `).join('');
+}
+
+function selectColor(c) {
+  state.selectedColor = c;
+  renderColorSwatches();
+}
+
+function renderMemberList(filter = '') {
+  const el = document.getElementById('member-list');
+  const users = state.users.filter(u => {
+    const name = `${u.firstname} ${u.lastname}`.trim() || u.login;
+    return !filter || name.toLowerCase().includes(filter.toLowerCase()) || (u.mail||'').toLowerCase().includes(filter.toLowerCase());
+  });
+  if (!users.length) { el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:1rem;font-size:0.85rem">No members found</div>'; return; }
+  el.innerHTML = users.map(u => {
+    const name = `${u.firstname} ${u.lastname}`.trim() || u.login;
+    const initials = name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
+    return `
+      <div class="member-row" onclick="toggleMember(${u.id},'${name.replace(/'/g,"\\'")}')">
+        <input type="checkbox" ${state.selectedMembers.has(u.id) ? 'checked' : ''} readonly/>
+        <div class="avatar" style="background:${COLORS[u.id % COLORS.length]}">${initials}</div>
+        <div class="member-info">
+          <div class="name">${name}</div>
+          <div class="email">${u.mail || u.login || ''}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleMember(id, name) {
+  if (state.selectedMembers.has(id)) state.selectedMembers.delete(id);
+  else state.selectedMembers.add(id);
+  renderMemberList(document.getElementById('member-search').value);
+}
+
+function filterMemberList() {
+  renderMemberList(document.getElementById('member-search').value);
+}
+
+function saveTeam() {
+  const name = document.getElementById('team-name-input').value.trim();
+  if (!name) { alert('Please enter a team name.'); return; }
+  if (!state.selectedMembers.size) { alert('Please select at least one member.'); return; }
+
+  const members = state.users
+    .filter(u => state.selectedMembers.has(u.id))
+    .map(u => ({ id: u.id, name: `${u.firstname} ${u.lastname}`.trim() || u.login }));
+
+  if (state.editingTeamId) {
+    const idx = state.teams.findIndex(t => t.id == state.editingTeamId);
+    if (idx !== -1) state.teams[idx] = { ...state.teams[idx], name, color: state.selectedColor, members };
+  } else {
+    state.teams.push({ id: Date.now(), name, color: state.selectedColor, members });
+  }
+
+  saveTeams();
+  closeTeamModal();
+  renderApp();
+}
+
+function saveTeams() {
+  localStorage.setItem('vhub_teams', JSON.stringify(state.teams));
+}
+</script>
+</body>
+</html>
