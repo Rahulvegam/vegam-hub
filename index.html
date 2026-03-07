@@ -721,65 +721,128 @@ async function fetchAllIssues() {
 }
 
 async function loadAllData() {
-  // Fast parallel fetching — fetch each project simultaneously
-  async function fetchAllIssuesForProject(projectId) {
-    // First get total count
-    let all = [];
-    try {
-      const el = document.getElementById("load-status"); if(el) el.textContent = `Fetching ${projectId}…`;
-      const first = await rmFetch('/issues.json', { limit: 100, offset: 0, status_id: '*', project_id: projectId });
-      const total = first.total_count || 0;
-      if (!first.issues || !first.issues.length) return [];
-      all = [...first.issues];
+  const projects = state.selectedProjects.length ? state.selectedProjects : [''];
 
-      // Build remaining page requests
-      const offsets = [];
-      for (let o = 100; o < total; o += 100) offsets.push(o);
-
-      // Fetch remaining pages in parallel (chunks of 5 at a time)
-      for (let i = 0; i < offsets.length; i += 5) {
-        const chunk = offsets.slice(i, i + 5);
-        const results = await Promise.all(chunk.map(offset =>
-          rmFetch('/issues.json', { limit: 100, offset, status_id: '*', project_id: projectId })
-            .then(d => d.issues || []).catch(() => [])
-        ));
-        results.forEach(r => all = all.concat(r));
-      }
-    } catch(e) {}
-    return all;
+  // --- Progress UI ---
+  let totalPages = 0, donePage = 0;
+  function showProgress(msg, pct) {
+    const el = document.getElementById('dash-content');
+    if (!el) return;
+    el.innerHTML = `
+      <div style="padding:2rem">
+        <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;margin-bottom:1rem;color:var(--text)">${msg}</div>
+        <div style="background:var(--surface2);border-radius:20px;height:8px;overflow:hidden;margin-bottom:0.75rem">
+          <div style="background:var(--accent);height:100%;width:${pct}%;transition:width 0.3s;border-radius:20px"></div>
+        </div>
+        <div style="color:var(--muted);font-size:0.8rem;font-family:'DM Mono',monospace">${Math.round(pct)}% complete — ${state.issues.length} issues loaded</div>
+        <div id="proj-status" style="margin-top:1.5rem;display:flex;flex-wrap:wrap;gap:0.5rem"></div>
+      </div>`;
   }
 
-  // Fetch all selected projects in parallel
-  const projects = state.selectedProjects.length ? state.selectedProjects : [''];
-  const projectResults = await Promise.all(projects.map(pid => fetchAllIssuesForProject(pid)));
-
-  // Merge and deduplicate
-  const seenIds = new Set();
-  state.issues = projectResults.flat().filter(i => {
-    if (seenIds.has(i.id)) return false;
-    seenIds.add(i.id); return true;
-  });
-
-  // Extract unique assignees from issues (no admin endpoint needed)
-  const seen = new Map();
-  allIssues.forEach(i => {
-    if (i.assigned_to && !seen.has(i.assigned_to.id)) {
-      seen.set(i.assigned_to.id, {
-        id: i.assigned_to.id,
-        login: i.assigned_to.name,
-        firstname: i.assigned_to.name,
-        lastname: '',
-        mail: ''
-      });
+  function updateProjStatus(projId, status, count) {
+    const el = document.getElementById('proj-status');
+    if (!el) return;
+    let chip = document.getElementById('chip-' + projId);
+    if (!chip) {
+      chip = document.createElement('div');
+      chip.id = 'chip-' + projId;
+      chip.style.cssText = 'padding:0.4rem 0.8rem;border-radius:20px;font-size:0.75rem;border:1px solid var(--border);transition:all 0.3s';
+      el.appendChild(chip);
     }
-  });
-  state.users = Array.from(seen.values());
+    if (status === 'loading') {
+      chip.style.borderColor = 'var(--accent)';
+      chip.style.color = 'var(--accent)';
+      chip.innerHTML = `⟳ ${projId} (${count})`;
+    } else if (status === 'done') {
+      chip.style.borderColor = 'var(--success)';
+      chip.style.color = 'var(--success)';
+      chip.innerHTML = `✓ ${projId} (${count})`;
+    }
+  }
 
-  // Load projects
+  showProgress('Connecting…', 0);
+  state.issues = [];
+
+  // --- Helper: merge issues into state deduped ---
+  const seenIds = new Set();
+  function mergeIssues(newIssues) {
+    newIssues.forEach(i => {
+      if (!seenIds.has(i.id)) { seenIds.add(i.id); state.issues.push(i); }
+    });
+    // rebuild users
+    const seenUsers = new Map();
+    state.issues.forEach(i => {
+      if (i.assigned_to && !seenUsers.has(i.assigned_to.id)) {
+        seenUsers.set(i.assigned_to.id, { id: i.assigned_to.id, login: i.assigned_to.name, firstname: i.assigned_to.name, lastname: '', mail: '' });
+      }
+    });
+    state.users = Array.from(seenUsers.values());
+  }
+
+  // --- Step 1: Fetch first 3 pages per project in parallel (quick preview) ---
+  const projectMeta = {};
+  await Promise.all(projects.map(async (pid) => {
+    updateProjStatus(pid, 'loading', 0);
+    try {
+      // Fetch pages 1, 2, 3 simultaneously
+      const [p1, p2, p3] = await Promise.all([
+        rmFetch('/issues.json', { limit: 100, offset: 0,   status_id: '*', ...(pid ? { project_id: pid } : {}) }),
+        rmFetch('/issues.json', { limit: 100, offset: 100, status_id: '*', ...(pid ? { project_id: pid } : {}) }).catch(() => ({ issues: [] })),
+        rmFetch('/issues.json', { limit: 100, offset: 200, status_id: '*', ...(pid ? { project_id: pid } : {}) }).catch(() => ({ issues: [] })),
+      ]);
+      const total = p1.total_count || 0;
+      const pages = Math.ceil(total / 100);
+      totalPages += pages;
+      donePage += Math.min(3, pages);
+      const firstBatch = [...(p1.issues||[]), ...(p2.issues||[]), ...(p3.issues||[])];
+      projectMeta[pid] = { total, pages, fetched: 3 };
+      mergeIssues(firstBatch);
+      updateProjStatus(pid, pages <= 3 ? 'done' : 'loading', firstBatch.length);
+    } catch(e) {
+      projectMeta[pid] = { total: 0, pages: 0, fetched: 3 };
+    }
+  }));
+
+  // --- Show dashboard immediately with first batch ---
+  renderApp();
+  const pct1 = Math.min(40, (donePage / Math.max(totalPages, 1)) * 100);
+  showProgress('Dashboard ready! Loading remaining issues in background…', pct1);
+
+  // --- Step 2: Background fetch remaining pages ---
+  await Promise.all(projects.map(async (pid) => {
+    const meta = projectMeta[pid];
+    if (!meta || meta.pages <= 3) return;
+
+    const offsets = [];
+    for (let o = 300; o < meta.total; o += 100) offsets.push(o);
+
+    for (let i = 0; i < offsets.length; i += 8) {
+      const chunk = offsets.slice(i, i + 8);
+      const results = await Promise.all(chunk.map(offset =>
+        rmFetch('/issues.json', { limit: 100, offset, status_id: '*', ...(pid ? { project_id: pid } : {}) })
+          .then(d => { donePage++; return d.issues || []; })
+          .catch(() => { donePage++; return []; })
+      ));
+      results.forEach(r => mergeIssues(r));
+
+      const pct = Math.min(95, (donePage / Math.max(totalPages, 1)) * 100);
+      // Update progress without re-rendering full dashboard
+      const dashEl = document.getElementById('dash-content');
+      const pgBar = dashEl ? dashEl.querySelector('[style*="background:var(--accent)"]') : null;
+      if (pgBar) pgBar.style.width = pct + '%';
+      updateProjStatus(pid, 'loading', state.issues.filter(x => x.project?.identifier === pid).length);
+    }
+    updateProjStatus(pid, 'done', state.issues.filter(x => x.project?.identifier === pid).length);
+  }));
+
+  // Final re-render with all data
+  renderApp();
+
+  // Load projects list
   try {
     const pData = await rmFetch('/projects.json', { limit: 100 });
-    state.projects = pData.projects || [];
-  } catch(e) { state.projects = []; }
+    state.allProjects = pData.projects || [];
+  } catch(e) {}
 
   state.lastRefresh = new Date();
   updateLastRefreshLabel();
