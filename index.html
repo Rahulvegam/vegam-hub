@@ -425,9 +425,9 @@ tr:hover td{background:var(--s2);color:var(--t1);}
     </div>
     <div class="auth-sub">Redmine-powered team intelligence</div>
     <label class="lbl">Redmine URL</label>
-    <input class="inp" id="rm-url" type="text" value="https://support.vegam.co" placeholder="https://your-redmine.com"/>
+    <input class="inp" id="rm-url" type="text" placeholder="https://your-redmine.com"/>
     <label class="lbl">API Key</label>
-    <input class="inp" id="rm-key" type="password" value="208d0767066bd32bf161c327f1ac3c1bfbbeabe4" placeholder="Your API access key"/>
+    <input class="inp" id="rm-key" type="password" placeholder="Your API access key"/>
     <div id="conn-err" class="err-msg" style="display:none">⚠ <span id="conn-err-txt"></span></div>
     <button class="btn btn-p btn-full" id="conn-btn" onclick="doConnect()">Connect →</button>
   </div>
@@ -560,8 +560,8 @@ tr:hover td{background:var(--s2);color:var(--t1);}
       <div class="sec" id="s-user">
         <div class="user-hero">
           <div class="user-hero-bg"></div>
-          <div class="user-hero-title">My Issues</div>
-          <div class="user-hero-sub">Search any team member to see their workload, stats and issue breakdown</div>
+          <div class="user-hero-title">My Issues <span class="info-btn" style="font-size:.7rem;vertical-align:middle">i<span class="tip">Search any team member to see their active workload. The count shown in the dropdown excludes Closed & Rejected issues. Use the status filter below to view closed issues.</span></span></div>
+          <div class="user-hero-sub">Active issues only (Closed & Rejected excluded from counts) · use status filter to view all</div>
           <div class="usearch-wrap">
             <div class="usearch">
               <span class="usearch-ico">🔍</span>
@@ -576,6 +576,7 @@ tr:hover td{background:var(--s2);color:var(--t1);}
 
       <!-- ALL ISSUES -->
       <div class="sec" id="s-issues">
+        <div style="font-size:1rem;font-weight:800;letter-spacing:-.4px;margin-bottom:1rem">All Issues <span class="info-btn">i<span class="tip">Complete list of all issues across selected projects. Includes every status — use the Status filter to narrow down. Filter by tracker, team, or priority to focus your view.</span></span></div>
         <div class="filters">
           <input class="inp" id="iq" placeholder="Search title or #ID…" oninput="renderIss()"/>
           <select class="inp" id="i-st" onchange="renderIss()"><option value="">All Statuses</option></select>
@@ -595,20 +596,26 @@ tr:hover td{background:var(--s2);color:var(--t1);}
 
       <!-- SPRINTS -->
       <div class="sec" id="s-sprint">
-        <div class="filters">
-          <input class="inp" id="sp-q" placeholder="Search versions/sprints…" oninput="renderSprints()"/>
-          <select class="inp" id="sp-st" onchange="renderSprints()"><option value="">All</option><option value="open">Open</option><option value="locked">Locked</option><option value="closed">Closed</option></select>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+          <div style="font-size:1rem;font-weight:800;letter-spacing:-.4px">Sprints <span class="info-btn">i<span class="tip">Lists Redmine versions (sprints). Progress % = issues marked Closed or Resolved ÷ total issues in that sprint. Open issues exclude Closed & Rejected.</span></span></div>
+          <div class="filters" style="margin-bottom:0;gap:.5rem">
+            <input class="inp" id="sp-q" placeholder="Search versions/sprints…" oninput="renderSprints()"/>
+            <select class="inp" id="sp-st" onchange="renderSprints()"><option value="">All</option><option value="open">Open</option><option value="locked">Locked</option><option value="closed">Closed</option></select>
+          </div>
         </div>
         <div id="sp-body"><div class="loading"><div class="spin"></div>Loading…</div></div>
       </div>
 
       <!-- CALENDAR -->
       <div class="sec" id="s-cal">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+          <div style="font-size:1rem;font-weight:800;letter-spacing:-.4px">Calendar <span class="info-btn">i<span class="tip">Shows issues by their due date. Red = overdue (past due date, not yet Closed/Rejected). Orange = due this month. Blue = future. Closed & Rejected issues are shown in green.</span></span></div>
+          <select class="inp" id="cal-tm" onchange="renderCal()" style="width:auto;margin-bottom:0;padding:.45rem .8rem"><option value="">All Teams</option></select>
+        </div>
         <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1.2rem;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="calPrev()">← Prev</button>
           <div id="cal-lbl" style="font-size:.95rem;font-weight:800;min-width:165px;text-align:center;letter-spacing:-.4px"></div>
           <button class="btn btn-ghost btn-sm" onclick="calNext()">Next →</button>
-          <select class="inp" id="cal-tm" onchange="renderCal()" style="width:auto;margin-left:auto;margin-bottom:0;padding:.45rem .8rem"><option value="">All Teams</option></select>
         </div>
         <div id="cal-wrap"></div>
       </div>
@@ -669,8 +676,24 @@ let S={
   iPage:0,iPerPage:50,
   lastRefresh:null,fetching:false,fetchPct:0,
   recentUsers:[],
-  fromApp:false, // track if proj picker opened from app
+  fromApp:false,
 };
+
+// ── PREFILL CREDENTIALS ───────────────────────
+(()=>{
+  const savedUrl=localStorage.getItem('vg_url');
+  const savedKey=localStorage.getItem('vg_key');
+  if(savedUrl){
+    const el=document.getElementById('rm-url');
+    if(el)el.value=savedUrl;
+    S.url=savedUrl;
+  }
+  if(savedKey){
+    const el=document.getElementById('rm-key');
+    if(el)el.value=savedKey;
+    S.key=savedKey;
+  }
+})();
 
 // ── THEME ─────────────────────────────────────
 (()=>{const t=localStorage.getItem('vg_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();
@@ -725,6 +748,9 @@ async function doConnect(){
   try{
     const r=await api('/issues.json',{limit:1});
     if(!r||r.issues===undefined)throw new Error('Invalid response');
+    // Save credentials to localStorage for this user's browser
+    localStorage.setItem('vg_url',url);
+    localStorage.setItem('vg_key',key);
     setFetch(true,15,'Loading projects…');
     const pd=await api('/projects.json',{limit:100});
     S.allProjects=pd.projects||[];
@@ -1139,16 +1165,16 @@ function uDDItem(u,q){
   const ql=(q||'').toLowerCase();
   let name=u.firstname;
   if(ql){const i=name.toLowerCase().indexOf(ql);if(i!==-1)name=name.slice(0,i)+`<span class="hi">${name.slice(i,i+ql.length)}</span>`+name.slice(i+ql.length);}
-  const cnt=u.cnt!==undefined?u.cnt:S.issues.filter(i=>i.assigned_to?.id===u.id).length;
-  const openCnt=S.issues.filter(i=>i.assigned_to?.id===u.id&&!['Closed','Rejected'].includes(i.status?.name)).length;
+  const activeCnt=u.cnt!==undefined?u.cnt:S.issues.filter(i=>i.assigned_to?.id===u.id&&!['Closed','Rejected'].includes(i.status?.name)).length;
+  const inPCnt=S.issues.filter(i=>i.assigned_to?.id===u.id&&i.status?.name==='In Progress').length;
   const initials=u.firstname.split(' ').map(p=>p[0]||'').join('').slice(0,2).toUpperCase()||u.firstname.slice(0,2).toUpperCase();
   return`<div class="udd-item" onclick="pickUser(${u.id},'${u.firstname.replace(/'/g,"\\'").replace(/"/g,'\\"')}')">
     <div class="av av-sm" style="background:linear-gradient(135deg,${CLRS[u.id%CLRS.length]},${CLRS[(u.id+3)%CLRS.length]})">${initials}</div>
     <div style="flex:1;min-width:0">
       <div class="udd-name">${name}</div>
-      <div class="udd-role" style="margin-top:.1rem">${openCnt} open · ${cnt-openCnt} closed</div>
+      <div class="udd-role" style="margin-top:.1rem">${activeCnt} active · ${inPCnt} in progress</div>
     </div>
-    <span class="udd-cnt">${cnt} issues</span>
+    <span class="udd-cnt">${activeCnt} active</span>
   </div>`;
 }
 function pickUser(id,name){
@@ -1568,6 +1594,10 @@ function doDisconnect(){
   document.getElementById('app').style.display='none';
   S.url='';S.key='';S.selProj=[];S.issues=[];S.users=[];
   localStorage.removeItem('vg_proj');
+  localStorage.removeItem('vg_url');
+  localStorage.removeItem('vg_key');
+  document.getElementById('rm-url').value='';
+  document.getElementById('rm-key').value='';
   document.getElementById('conn-btn').textContent='Connect →';
   document.getElementById('conn-btn').disabled=false;
   document.getElementById('conn-err').style.display='none';
