@@ -567,24 +567,32 @@ async function connectRedmine() {
   const url = document.getElementById('rm-url').value.trim().replace(/\/$/, '');
   const key = document.getElementById('rm-key').value.trim();
   const errEl = document.getElementById('connect-error');
+  const btn = document.querySelector('#connect-screen .btn-primary');
   errEl.style.display = 'none';
 
   if (!url || !key) { errEl.textContent = 'Please fill in all fields.'; errEl.style.display = 'block'; return; }
 
   state.url = url; state.key = key;
+  btn.textContent = 'Connecting…'; btn.disabled = true;
 
   try {
-    // Test connection by fetching issues (no admin rights needed)
     const res = await rmFetch('/issues.json', { limit: 1 });
     if (!res || res.issues === undefined) throw new Error('Invalid response');
-    await loadAllData();
+
+    // Show app immediately
     document.getElementById('connect-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     document.getElementById('sb-url').textContent = url.replace('https://','');
+    document.getElementById('dash-content').innerHTML = '<div class=\"loading\"><div class=\"spinner\"></div>Loading all issues… (this may take a moment)</div>';
+    renderTeamNav(); renderDashTeamTabs(); renderTeamsGrid();
+
+    // Load all data in background
+    await loadAllData();
     renderApp();
   } catch(e) {
     errEl.textContent = 'Connection failed: ' + (e.message || 'Check URL and API key.');
     errEl.style.display = 'block';
+    btn.textContent = 'Connect to Redmine →'; btn.disabled = false;
   }
 }
 
