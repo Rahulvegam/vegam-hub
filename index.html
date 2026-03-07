@@ -1046,7 +1046,7 @@ function renderDash(){
   const tc=getCSS('--t1'),t2=getCSS('--t2'),t3=getCSS('--t3');
   setTimeout(()=>{
     const sc=document.getElementById('d-s');
-    if(sc)DC.s=new Chart(sc,{type:'doughnut',data:{labels:Object.keys(sMap),datasets:[{data:Object.values(sMap),backgroundColor:CLRS.map(c=>c+'cc'),borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',layout:{padding:{bottom:4}},plugins:{legend:{position:'bottom',align:'start',labels:{color:tc,font:{family:'Inter',size:10},boxWidth:10,padding:10,generateLabels:(chart)=>{const ds=chart.data.datasets[0];return chart.data.labels.map((l,i)=>({text:l.length>20?l.slice(0,20)+'…':l,fillStyle:ds.backgroundColor[i],strokeStyle:ds.backgroundColor[i],lineWidth:0,hidden:false,index:i}));}}}}}}});
+    if(sc){DC.s=new Chart(sc,{type:'doughnut',data:{labels:Object.keys(sMap),datasets:[{data:Object.values(sMap),backgroundColor:CLRS.map(c=>c+'cc'),borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',align:'start',labels:{color:tc,font:{family:'Inter',size:10},boxWidth:10,padding:10}}}}});}
     const wc=document.getElementById('d-w');
     if(wc){const sorted=Object.entries(mMap).sort((a,b)=>b[1]-a[1]).slice(0,10);DC.w=new Chart(wc,{type:'bar',data:{labels:sorted.map(([n])=>n.split(' ')[0]),datasets:[{data:sorted.map(([,v])=>v),backgroundColor:CLRS.map(c=>c+'44'),borderColor:CLRS,borderWidth:1.5,borderRadius:7,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{color:t3,font:{size:10}},grid:{color:getCSS('--b1')}},y:{ticks:{color:tc,font:{size:10}},grid:{display:false}}}}});}
   },50);
