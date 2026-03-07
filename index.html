@@ -419,6 +419,27 @@
   </div>
 </div>
 
+
+<!-- PROJECT PICKER SCREEN -->
+<div id="project-screen" style="display:none;min-height:100vh;align-items:center;justify-content:center;padding:2rem;background:radial-gradient(ellipse at 20% 50%, #1a1040 0%, transparent 60%),radial-gradient(ellipse at 80% 20%, #0d2040 0%, transparent 50%),var(--bg);">
+  <div class="connect-card" style="max-width:560px">
+    <div class="logo">Select <span>Projects</span></div>
+    <div class="tagline">Choose which Redmine projects to include in your dashboard</div>
+    <div style="margin-bottom:1rem">
+      <input type="text" id="project-search" placeholder="Search projects…" oninput="filterProjects()" style="margin-bottom:0.5rem"/>
+    </div>
+    <div id="project-list" style="max-height:350px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:1.2rem"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <span id="project-count" style="color:var(--muted);font-size:0.8rem"></span>
+      <div style="display:flex;gap:0.5rem">
+        <button class="btn btn-outline btn-sm" onclick="selectAllProjects()">Select All</button>
+        <button class="btn btn-outline btn-sm" onclick="clearAllProjects()">Clear</button>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="confirmProjects()">Load Dashboard →</button>
+  </div>
+</div>
+
 <!-- SIDEBAR OVERLAY (mobile) -->
 <div class="overlay" id="overlay" onclick="closeSidebar()"></div>
 
@@ -445,7 +466,7 @@
     <div class="sidebar-bottom">
       <strong id="sb-url"></strong>
       <span id="sb-lastrefresh"></span>
-      <br/><a href="#" onclick="disconnect()" style="color:var(--muted);font-size:0.75rem;text-decoration:none;">Disconnect</a>
+      <br/><a href="#" onclick="changeProjects()" style="color:var(--muted);font-size:0.75rem;text-decoration:none;margin-right:0.75rem">⚙ Projects</a><a href="#" onclick="disconnect()" style="color:var(--muted);font-size:0.75rem;text-decoration:none;">Disconnect</a>
     </div>
   </div>
 
@@ -558,6 +579,8 @@ let state = {
   selectedColor: '#6c63ff',
   selectedMembers: new Set(),
   lastRefresh: null,
+  selectedProjects: JSON.parse(localStorage.getItem('vhub_projects') || '[]'),
+  allProjects: [],
 };
 
 const COLORS = ['#6c63ff','#ff6584','#43e97b','#f7971e','#00d2ff','#a29bfe','#fd79a8','#00b894','#fdcb6e','#e17055'];
@@ -579,16 +602,18 @@ async function connectRedmine() {
     const res = await rmFetch('/issues.json', { limit: 1 });
     if (!res || res.issues === undefined) throw new Error('Invalid response');
 
-    // Show app immediately
-    document.getElementById('connect-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'flex';
-    document.getElementById('sb-url').textContent = url.replace('https://','');
-    document.getElementById('dash-content').innerHTML = '<div class=\"loading\"><div class=\"spinner\"></div>Loading all issues… (this may take a moment)</div>';
-    renderTeamNav(); renderDashTeamTabs(); renderTeamsGrid();
+    // Load projects list then show picker
+    const pData = await rmFetch('/projects.json', { limit: 100 });
+    state.allProjects = pData.projects || [];
 
-    // Load all data in background
-    await loadAllData();
-    renderApp();
+    // If projects already saved, go straight to app
+    if (state.selectedProjects.length) {
+      showApp();
+    } else {
+      document.getElementById('connect-screen').style.display = 'none';
+      document.getElementById('project-screen').style.display = 'flex';
+      renderProjectPicker();
+    }
   } catch(e) {
     errEl.textContent = 'Connection failed: ' + (e.message || 'Check URL and API key.');
     errEl.style.display = 'block';
@@ -596,10 +621,77 @@ async function connectRedmine() {
   }
 }
 
+
+async function showApp() {
+  document.getElementById('connect-screen').style.display = 'none';
+  document.getElementById('project-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('sb-url').textContent = state.url.replace('https://','');
+  document.getElementById('dash-content').innerHTML = '<div class=\"loading\"><div class=\"spinner\"></div>Loading issues… (this may take a moment)</div>';
+  renderTeamNav(); renderDashTeamTabs(); renderTeamsGrid();
+  await loadAllData();
+  renderApp();
+}
+
+function renderProjectPicker(filter='') {
+  const el = document.getElementById('project-list');
+  const projects = state.allProjects.filter(p =>
+    !filter || p.name.toLowerCase().includes(filter.toLowerCase()) || p.identifier.toLowerCase().includes(filter.toLowerCase())
+  );
+  el.innerHTML = projects.map(p => `
+    <div class="member-row" onclick="toggleProject('${p.identifier}')" style="padding:0.75rem 1rem">
+      <input type="checkbox" ${state.selectedProjects.includes(p.identifier) ? 'checked' : ''} readonly/>
+      <div>
+        <div style="font-size:0.88rem;font-weight:500">${p.name}</div>
+        <div style="font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace">${p.identifier}</div>
+      </div>
+    </div>
+  `).join('') || '<div class="empty">No projects found</div>';
+  document.getElementById('project-count').textContent = `${state.selectedProjects.length} of ${state.allProjects.length} selected`;
+}
+
+function filterProjects() {
+  renderProjectPicker(document.getElementById('project-search').value);
+}
+
+function toggleProject(id) {
+  const idx = state.selectedProjects.indexOf(id);
+  if (idx === -1) state.selectedProjects.push(id);
+  else state.selectedProjects.splice(idx, 1);
+  localStorage.setItem('vhub_projects', JSON.stringify(state.selectedProjects));
+  renderProjectPicker(document.getElementById('project-search').value);
+}
+
+function selectAllProjects() {
+  state.selectedProjects = state.allProjects.map(p => p.identifier);
+  localStorage.setItem('vhub_projects', JSON.stringify(state.selectedProjects));
+  renderProjectPicker(document.getElementById('project-search').value);
+}
+
+function clearAllProjects() {
+  state.selectedProjects = [];
+  localStorage.setItem('vhub_projects', JSON.stringify(state.selectedProjects));
+  renderProjectPicker(document.getElementById('project-search').value);
+}
+
+async function confirmProjects() {
+  if (!state.selectedProjects.length) { alert('Please select at least one project.'); return; }
+  await showApp();
+}
+
+function changeProjects() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('project-screen').style.display = 'flex';
+  renderProjectPicker();
+}
+
 function disconnect() {
   document.getElementById('connect-screen').style.display = 'flex';
+  document.getElementById('project-screen').style.display = 'none';
   document.getElementById('app').style.display = 'none';
   state.url = ''; state.key = '';
+  state.selectedProjects = [];
+  localStorage.removeItem('vhub_projects');
 }
 
 // ── REDMINE API (via Cloudflare proxy to bypass CORS) ──
@@ -634,7 +726,7 @@ async function loadAllData() {
   let total = Infinity;
   while (allIssues.length < total) {
     try {
-      const data = await rmFetch('/issues.json', { offset, limit, status_id: '*' });
+      const data = await rmFetch('/issues.json', { offset, limit, status_id: '*', ...( state.selectedProjects.length ? { project_id: state.selectedProjects.join(',') } : {} ) });
       total = data.total_count || 0;
       if (!data.issues || !data.issues.length) break;
       allIssues = allIssues.concat(data.issues);
