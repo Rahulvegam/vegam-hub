@@ -356,7 +356,17 @@ tr:hover td{background:var(--s2);color:var(--t1);}
 .sprint-card{background:var(--s1);border:1px solid var(--b1);border-radius:14px;padding:1.2rem;margin-bottom:.8rem;transition:all .2s;}
 .sprint-card:hover{border-color:var(--b2);transform:translateX(3px);}
 
-/* ── INLINE PROJECT PANEL ── */
+/* ── INFO TOOLTIPS ── */
+.info-btn{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:var(--b2);color:var(--t3);font-size:.6rem;font-weight:700;cursor:help;margin-left:.4rem;position:relative;flex-shrink:0;vertical-align:middle;border:1px solid var(--b3);transition:all .15s;}
+.info-btn:hover{background:var(--a);color:#fff;border-color:var(--a);}
+.info-btn .tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--s4);border:1px solid var(--b2);border-radius:10px;padding:.55rem .75rem;font-size:.72rem;line-height:1.5;color:var(--t1);white-space:nowrap;max-width:260px;white-space:normal;width:max-content;max-width:240px;pointer-events:none;opacity:0;transition:opacity .15s;z-index:999;box-shadow:var(--sh);font-weight:400;}
+.info-btn:hover .tip{opacity:1;}
+.info-btn .tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--b2);}
+/* ── USER ISSUE STATUS FILTER ── */
+.u-filter-bar{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.8rem;}
+.u-filter-btn{padding:.3rem .75rem;border-radius:20px;border:1px solid var(--b2);background:var(--s2);color:var(--t2);font-size:.72rem;font-weight:600;cursor:pointer;transition:all .15s;}
+.u-filter-btn.on{background:var(--a);color:#fff;border-color:var(--a);}
+.u-filter-btn:hover:not(.on){border-color:var(--a);color:var(--a);}
 #proj-panel{transform:translateX(100%);opacity:0;transition:transform .28s cubic-bezier(.4,0,.2,1),opacity .28s;will-change:transform;}
 #proj-panel[style*="flex"]{transform:translateX(0)!important;opacity:1!important;}
 @media(max-width:768px){#proj-panel{width:100%!important;}}
@@ -1011,6 +1021,9 @@ function getIss(tid){
 }
 
 let DC={};
+const CLOSED_ST=['Closed','Rejected'];
+function isClosed(i){return CLOSED_ST.includes(i.status?.name);}
+function infoBtn(tip){return`<span class="info-btn">i<span class="tip">${tip}</span></span>`;}
 function renderDash(){
   const iss=getIss(S.curTeam);
   const today=new Date();today.setHours(0,0,0,0);
@@ -1021,22 +1034,29 @@ function renderDash(){
   const od=iss.filter(i=>i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name)).length;
   const una=iss.filter(i=>!i.assigned_to).length;
   const sMap={},mMap={};
-  iss.forEach(i=>{const s=i.status?.name||'?';sMap[s]=(sMap[s]||0)+1;if(i.assigned_to){const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;}});
+  iss.forEach(i=>{
+    const s=i.status?.name||'?';
+    sMap[s]=(sMap[s]||0)+1;
+    // Workload: only count active (non-closed) issues
+    if(i.assigned_to&&!['Closed','Rejected'].includes(i.status?.name)){
+      const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;
+    }
+  });
   const odList=iss.filter(i=>i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name));
   Object.values(DC).forEach(c=>{try{c.destroy();}catch(_){}});DC={};
 
   document.getElementById('dash-body').innerHTML=`
     <div class="stats">
-      <div class="stat"><div class="stat-bg" style="background:var(--a)"></div><span class="stat-ico">📦</span><div class="stat-lbl">Total</div><div class="stat-n sv">${total.toLocaleString()}</div><div class="stat-hint">${S.selProj.length} project${S.selProj.length!==1?'s':''}</div></div>
-      <div class="stat"><div class="stat-bg" style="background:var(--a4)"></div><span class="stat-ico">🔓</span><div class="stat-lbl">Open</div><div class="stat-n sv ora">${open.toLocaleString()}</div><div class="stat-hint">${total?Math.round(open/total*100):0}% of total</div></div>
-      <div class="stat"><div class="stat-bg" style="background:var(--info)"></div><span class="stat-ico">⚙</span><div class="stat-lbl">In Progress</div><div class="stat-n sv blu">${inP.toLocaleString()}</div></div>
-      <div class="stat"><div class="stat-bg" style="background:var(--ok)"></div><span class="stat-ico">✓</span><div class="stat-lbl">Resolved</div><div class="stat-n sv grn">${res.toLocaleString()}</div><div class="stat-hint">${total?Math.round(res/total*100):0}% done</div></div>
-      <div class="stat"><div class="stat-bg" style="background:var(--danger)"></div><span class="stat-ico">⚠</span><div class="stat-lbl">Overdue</div><div class="stat-n sv red">${od.toLocaleString()}</div></div>
-      <div class="stat"><div class="stat-bg" style="background:var(--a2)"></div><span class="stat-ico">○</span><div class="stat-lbl">Unassigned</div><div class="stat-n sv pnk">${una.toLocaleString()}</div></div>
+      <div class="stat"><div class="stat-bg" style="background:var(--a)"></div><span class="stat-ico">📦</span><div class="stat-lbl">Total ${infoBtn('All issues fetched across selected projects, including every status.')}</div><div class="stat-n sv">${total.toLocaleString()}</div><div class="stat-hint">${S.selProj.length} project${S.selProj.length!==1?'s':''}</div></div>
+      <div class="stat"><div class="stat-bg" style="background:var(--a4)"></div><span class="stat-ico">🔓</span><div class="stat-lbl">Open ${infoBtn('Issues not yet Closed or Rejected — still active and needing attention.')}</div><div class="stat-n sv ora">${open.toLocaleString()}</div><div class="stat-hint">${total?Math.round(open/total*100):0}% of total</div></div>
+      <div class="stat"><div class="stat-bg" style="background:var(--info)"></div><span class="stat-ico">⚙</span><div class="stat-lbl">In Progress ${infoBtn('Issues with status exactly "In Progress" — actively being worked on right now.')}</div><div class="stat-n sv blu">${inP.toLocaleString()}</div></div>
+      <div class="stat"><div class="stat-bg" style="background:var(--ok)"></div><span class="stat-ico">✓</span><div class="stat-lbl">Resolved ${infoBtn('Issues marked Resolved or Closed — completed work.')}</div><div class="stat-n sv grn">${res.toLocaleString()}</div><div class="stat-hint">${total?Math.round(res/total*100):0}% done</div></div>
+      <div class="stat"><div class="stat-bg" style="background:var(--danger)"></div><span class="stat-ico">⚠</span><div class="stat-lbl">Overdue ${infoBtn('Open issues whose due date is before today. Closed & Rejected issues are excluded.')}</div><div class="stat-n sv red">${od.toLocaleString()}</div></div>
+      <div class="stat"><div class="stat-bg" style="background:var(--a2)"></div><span class="stat-ico">○</span><div class="stat-lbl">Unassigned ${infoBtn('Issues with no assignee set in Redmine, across all statuses.')}</div><div class="stat-n sv pnk">${una.toLocaleString()}</div></div>
     </div>
     <div class="g2">
-      <div class="card"><div class="ctitle">Status Breakdown</div><div class="ch" style="height:300px"><canvas id="d-s"></canvas></div></div>
-      <div class="card"><div class="ctitle">Member Workload<span class="csub"> top 10</span></div><div class="ch" style="height:300px"><canvas id="d-w"></canvas></div></div>
+      <div class="card"><div class="ctitle">Status Breakdown<span class="info-btn">i<span class="tip">Shows how all issues are distributed across each status (New, In Progress, Closed, etc.). Includes all statuses.</span></span></div><div class="ch" style="height:300px"><canvas id="d-s"></canvas></div></div>
+      <div class="card"><div class="ctitle">Member Workload<span class="csub"> top 10</span><span class="info-btn">i<span class="tip">Shows top 10 members by number of active (non-closed) issues assigned. Closed &amp; Rejected issues are excluded.</span></span></div><div class="ch" style="height:300px"><canvas id="d-w"></canvas></div></div>
     </div>
     ${odList.length?`<div class="card" style="border-color:rgba(239,68,68,.2);margin-bottom:1.2rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem">
@@ -1098,7 +1118,7 @@ function onUserType(){
   if(!q){dd.classList.remove('show');dd.innerHTML='';return;}
   const ql=q.toLowerCase();
   const matches=S.users
-    .map(u=>({...u,cnt:S.issues.filter(i=>i.assigned_to?.id===u.id).length,score:u.firstname.toLowerCase().startsWith(ql)?2:u.firstname.toLowerCase().includes(ql)?1:0}))
+    .map(u=>({...u,cnt:S.issues.filter(i=>i.assigned_to?.id===u.id&&!['Closed','Rejected'].includes(i.status?.name)).length,score:u.firstname.toLowerCase().startsWith(ql)?2:u.firstname.toLowerCase().includes(ql)?1:0}))
     .filter(u=>u.score>0)
     .sort((a,b)=>b.score-a.score||b.cnt-a.cnt);
   if(!matches.length){
@@ -1174,6 +1194,9 @@ function renderUserDash(uid){
   const pct=iss.length?Math.round(closed/iss.length*100):0;
   Object.values(UC).forEach(c=>{try{c.destroy();}catch(_){}});UC={};
 
+  // Get unique statuses for filter dropdown
+  const statuses=[...new Set(iss.map(i=>i.status?.name||'?'))].sort();
+
   document.getElementById('user-body').innerHTML=`
     <div class="card" style="margin-bottom:1.2rem;background:linear-gradient(135deg,rgba(99,102,241,.06),rgba(236,72,153,.04))">
       <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
@@ -1190,33 +1213,101 @@ function renderUserDash(uid){
     </div>
     <div class="stats" style="margin-bottom:1.2rem">
       <div class="stat"><span class="stat-ico">📦</span><div class="stat-lbl">Total</div><div class="stat-n sv">${iss.length}</div></div>
-      <div class="stat"><span class="stat-ico">🔓</span><div class="stat-lbl">Open</div><div class="stat-n sv ora">${open}</div></div>
-      <div class="stat"><span class="stat-ico">⚙</span><div class="stat-lbl">In Progress</div><div class="stat-n sv blu">${inP}</div></div>
-      <div class="stat"><span class="stat-ico">✓</span><div class="stat-lbl">Closed</div><div class="stat-n sv grn">${closed}</div></div>
-      <div class="stat"><span class="stat-ico">⚠</span><div class="stat-lbl">Overdue</div><div class="stat-n sv red">${overdueList.length}</div></div>
+      <div class="stat" style="cursor:pointer" onclick="setUFilt('')"><span class="stat-ico">🔓</span><div class="stat-lbl">Open</div><div class="stat-n sv ora">${open}</div></div>
+      <div class="stat" style="cursor:pointer" onclick="setUFilt('In Progress')"><span class="stat-ico">⚙</span><div class="stat-lbl">In Progress</div><div class="stat-n sv blu">${inP}</div></div>
+      <div class="stat" style="cursor:pointer" onclick="setUFilt('Closed')"><span class="stat-ico">✓</span><div class="stat-lbl">Closed</div><div class="stat-n sv grn">${closed}</div></div>
+      <div class="stat" style="cursor:pointer" onclick="setUFilt('__overdue__')"><span class="stat-ico">⚠</span><div class="stat-lbl">Overdue</div><div class="stat-n sv red">${overdueList.length}</div></div>
     </div>
     <div class="g2">
-      <div class="card"><div class="ctitle">Status Breakdown</div><div class="ch"><canvas id="u-s"></canvas></div></div>
-      <div class="card"><div class="ctitle">By Tracker</div><div class="ch"><canvas id="u-t"></canvas></div></div>
+      <div class="card"><div class="ctitle">Status Breakdown<span class="info-btn">i<span class="tip">Distribution of all issues by status for this member. Click a stat card above to filter the issue list below.</span></span></div><div class="ch"><canvas id="u-s"></canvas></div></div>
+      <div class="card"><div class="ctitle">By Tracker<span class="info-btn">i<span class="tip">Number of issues by tracker type (Bug, Task, User Story, etc.) assigned to this member.</span></span></div><div class="ch"><canvas id="u-t"></canvas></div></div>
     </div>
-    <div class="card">
-      <div class="ctitle">All Issues <span style="font-weight:400;font-size:.78rem;color:var(--t2)">(${iss.length})</span></div>
+    <div class="card" style="margin-top:1.2rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem;flex-wrap:wrap;gap:.5rem">
+        <div class="ctitle" style="margin-bottom:0">Issues <span id="u-iss-count" style="font-weight:400;font-size:.78rem;color:var(--t2)"></span></div>
+        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+          <select id="u-stat-filter" onchange="renderUIssues(${uid})" class="inp" style="padding:.3rem .7rem;font-size:.78rem;height:auto;width:auto;margin:0">
+            <option value="">All Statuses</option>
+            ${statuses.map(s=>`<option value="${s}">${s}</option>`).join('')}
+          </select>
+          <select id="u-tracker-filter" onchange="renderUIssues(${uid})" class="inp" style="padding:.3rem .7rem;font-size:.78rem;height:auto;width:auto;margin:0">
+            <option value="">All Trackers</option>
+            ${[...new Set(iss.map(i=>i.tracker?.name||'?'))].sort().map(t=>`<option value="${t}">${t}</option>`).join('')}
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('u-stat-filter').value='';document.getElementById('u-tracker-filter').value='';renderUIssues(${uid})">Clear</button>
+        </div>
+      </div>
       <div class="tw"><table><thead><tr><th>#</th><th>Title</th><th>Tracker</th><th>Status</th><th>Priority</th><th>Due</th></tr></thead>
-      <tbody>${iss.map(i=>{const o=i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name);return`<tr class="${o?'od-row':''}">
-        <td><a href="${S.url}/issues/${i.id}" target="_blank" style="color:var(--a);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.72rem">#${i.id}</a></td>
-        <td style="color:var(--t1)">${i.subject.slice(0,58)}${i.subject.length>58?'…':''}${o?'<span class="od-tag">OD</span>':''}</td>
-        <td><span class="chip">${i.tracker?.name||'—'}</span></td>
-        <td>${sbadge(i.status?.name)}</td>
-        <td class="${pcls(i.priority?.name)}">${i.priority?.name||'—'}</td>
-        <td style="font-family:'JetBrains Mono',monospace;font-size:.72rem;${o?'color:var(--danger)':''}">${i.due_date||'—'}</td>
-      </tr>`}).join('')}</tbody></table></div>
+      <tbody id="u-iss-tbody"></tbody></table></div>
+      <div id="u-iss-pages"></div>
     </div>`;
 
   const tc=getCSS('--t1');
   setTimeout(()=>{
     const us=document.getElementById('u-s');if(us)UC.s=new Chart(us,{type:'doughnut',data:{labels:Object.keys(sMap),datasets:[{data:Object.values(sMap),backgroundColor:CLRS.map(c=>c+'cc'),borderWidth:0,hoverOffset:5}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'right',labels:{color:tc,font:{family:'Inter',size:11},boxWidth:9,padding:8}}}}});
     const ut=document.getElementById('u-t');if(ut)UC.t=new Chart(ut,{type:'bar',data:{labels:Object.keys(tMap),datasets:[{data:Object.values(tMap),backgroundColor:CLRS.map(c=>c+'44'),borderColor:CLRS,borderWidth:1.5,borderRadius:7,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:getCSS('--t3'),font:{size:10}}},y:{ticks:{color:tc,font:{size:10}},grid:{color:getCSS('--b1')}}}}});
+    renderUIssues(uid);
   },50);
+}
+
+let _uIss=[],_uPage=0;const _uPerPage=50;
+function setUFilt(val){
+  const sf=document.getElementById('u-stat-filter');
+  if(!sf)return;
+  if(val==='__overdue__'){
+    // special: filter overdue in renderUIssues
+    sf.value='__overdue__';
+    // add option if not present
+    if(![...sf.options].find(o=>o.value==='__overdue__')){
+      const opt=document.createElement('option');opt.value='__overdue__';opt.textContent='Overdue';sf.appendChild(opt);
+    }
+  } else {
+    sf.value=val;
+  }
+  const uid=S.curUser;
+  renderUIssues(uid);
+}
+function renderUIssues(uid){
+  const tbody=document.getElementById('u-iss-tbody');
+  const pages=document.getElementById('u-iss-pages');
+  const countEl=document.getElementById('u-iss-count');
+  if(!tbody)return;
+  const sf=document.getElementById('u-stat-filter')?.value||'';
+  const tf=document.getElementById('u-tracker-filter')?.value||'';
+  const today=new Date();today.setHours(0,0,0,0);
+  let iss=S.issues.filter(i=>i.assigned_to?.id===uid);
+  if(sf==='__overdue__') iss=iss.filter(i=>i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name));
+  else if(sf) iss=iss.filter(i=>i.status?.name===sf);
+  if(tf) iss=iss.filter(i=>i.tracker?.name===tf);
+  _uIss=iss; _uPage=0;
+  if(countEl)countEl.textContent=`(${iss.length})`;
+  _renderUIssPage();
+}
+function _renderUIssPage(){
+  const tbody=document.getElementById('u-iss-tbody');
+  const pages=document.getElementById('u-iss-pages');
+  if(!tbody)return;
+  const today=new Date();today.setHours(0,0,0,0);
+  const slice=_uIss.slice(_uPage*_uPerPage,(_uPage+1)*_uPerPage);
+  tbody.innerHTML=slice.map(i=>{const o=i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name);return`<tr class="${o?'od-row':''}">
+    <td><a href="${S.url}/issues/${i.id}" target="_blank" style="color:var(--a);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.72rem">#${i.id}</a></td>
+    <td style="color:var(--t1)">${i.subject.slice(0,58)}${i.subject.length>58?'…':''}${o?'<span class="od-tag">OD</span>':''}</td>
+    <td><span class="chip">${i.tracker?.name||'—'}</span></td>
+    <td>${sbadge(i.status?.name)}</td>
+    <td class="${pcls(i.priority?.name)}">${i.priority?.name||'—'}</td>
+    <td style="font-family:'JetBrains Mono',monospace;font-size:.72rem;${o?'color:var(--danger)':''}">${i.due_date||'—'}</td>
+  </tr>`}).join('');
+  if(!pages)return;
+  const tp=Math.ceil(_uIss.length/_uPerPage);
+  if(tp<=1){pages.innerHTML='';return;}
+  pages.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;padding:.65rem 1rem;border-top:1px solid var(--b1);background:var(--s2);border-radius:0 0 12px 12px">
+    <span style="font-size:.7rem;color:var(--t3);font-family:'JetBrains Mono',monospace">${_uIss.length} issues · page ${_uPage+1} of ${tp}</span>
+    <div style="display:flex;gap:.35rem">
+      ${_uPage>0?`<button class="btn btn-ghost btn-sm" onclick="_uPage--;_renderUIssPage()">← Prev</button>`:''}
+      ${Array.from({length:Math.min(tp,7)},(_,i)=>`<button class="btn btn-sm ${i===_uPage?'btn-p':'btn-ghost'}" onclick="_uPage=${i};_renderUIssPage()">${i+1}</button>`).join('')}
+      ${_uPage<tp-1?`<button class="btn btn-ghost btn-sm" onclick="_uPage++;_renderUIssPage()">Next →</button>`:''}
+    </div>
+  </div>`;
 }
 
 // ── TRACKER ───────────────────────────────────
@@ -1230,8 +1321,8 @@ function renderTracker(){
   const entries=Object.entries(tMap).sort((a,b)=>b[1].total-a[1].total);
   document.getElementById('tr-body').innerHTML=`
     <div class="g2" style="margin-bottom:1.2rem">
-      <div class="card"><div class="ctitle">Distribution</div><div class="ch"><canvas id="t-d"></canvas></div></div>
-      <div class="card"><div class="ctitle">Open vs Closed</div><div class="ch"><canvas id="t-c"></canvas></div></div>
+      <div class="card"><div class="ctitle">Distribution<span class="info-btn">i<span class="tip">Total issues per tracker type (Bug, Task, User Story, etc.) across all selected projects.</span></span></div><div class="ch"><canvas id="t-d"></canvas></div></div>
+      <div class="card"><div class="ctitle">Open vs Closed<span class="info-btn">i<span class="tip">For each tracker, shows how many issues are still open vs closed/resolved.</span></span></div><div class="ch"><canvas id="t-c"></canvas></div></div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.8rem">
       ${entries.map(([name,d],i)=>`<div class="card" style="border-left:2.5px solid ${CLRS[i%CLRS.length]}">
