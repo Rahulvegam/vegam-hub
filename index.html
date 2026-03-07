@@ -627,7 +627,7 @@ async function showApp() {
   document.getElementById('project-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   document.getElementById('sb-url').textContent = state.url.replace('https://','');
-  document.getElementById('dash-content').innerHTML = '<div class=\"loading\"><div class=\"spinner\"></div>Loading issues… (this may take a moment)</div>';
+  document.getElementById('dash-content').innerHTML = '<div class=\"loading\"><div class=\"spinner\"></div>Loading issues… <span id="load-status"></span></div>';
   renderTeamNav(); renderDashTeamTabs(); renderTeamsGrid();
   await loadAllData();
   renderApp();
@@ -721,20 +721,44 @@ async function fetchAllIssues() {
 }
 
 async function loadAllData() {
-  // Load issues first (no admin rights needed)
-  let allIssues = [], offset = 0, limit = 100;
-  let total = Infinity;
-  while (allIssues.length < total) {
+  // Fast parallel fetching — fetch each project simultaneously
+  async function fetchAllIssuesForProject(projectId) {
+    // First get total count
+    let all = [];
     try {
-      const data = await rmFetch('/issues.json', { offset, limit, status_id: '*', ...( state.selectedProjects.length ? { project_id: state.selectedProjects.join(',') } : {} ) });
-      total = data.total_count || 0;
-      if (!data.issues || !data.issues.length) break;
-      allIssues = allIssues.concat(data.issues);
-      offset += limit;
-      if (offset >= total) break;
-    } catch(e) { break; }
+      const el = document.getElementById("load-status"); if(el) el.textContent = `Fetching ${projectId}…`;
+      const first = await rmFetch('/issues.json', { limit: 100, offset: 0, status_id: '*', project_id: projectId });
+      const total = first.total_count || 0;
+      if (!first.issues || !first.issues.length) return [];
+      all = [...first.issues];
+
+      // Build remaining page requests
+      const offsets = [];
+      for (let o = 100; o < total; o += 100) offsets.push(o);
+
+      // Fetch remaining pages in parallel (chunks of 5 at a time)
+      for (let i = 0; i < offsets.length; i += 5) {
+        const chunk = offsets.slice(i, i + 5);
+        const results = await Promise.all(chunk.map(offset =>
+          rmFetch('/issues.json', { limit: 100, offset, status_id: '*', project_id: projectId })
+            .then(d => d.issues || []).catch(() => [])
+        ));
+        results.forEach(r => all = all.concat(r));
+      }
+    } catch(e) {}
+    return all;
   }
-  state.issues = allIssues;
+
+  // Fetch all selected projects in parallel
+  const projects = state.selectedProjects.length ? state.selectedProjects : [''];
+  const projectResults = await Promise.all(projects.map(pid => fetchAllIssuesForProject(pid)));
+
+  // Merge and deduplicate
+  const seenIds = new Set();
+  state.issues = projectResults.flat().filter(i => {
+    if (seenIds.has(i.id)) return false;
+    seenIds.add(i.id); return true;
+  });
 
   // Extract unique assignees from issues (no admin endpoint needed)
   const seen = new Map();
