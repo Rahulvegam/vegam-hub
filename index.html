@@ -574,9 +574,9 @@ async function connectRedmine() {
   state.url = url; state.key = key;
 
   try {
-    // Test connection by fetching current user
-    const res = await rmFetch('/users/current.json');
-    if (!res || !res.user) throw new Error('Invalid response');
+    // Test connection by fetching issues (no admin rights needed)
+    const res = await rmFetch('/issues.json', { limit: 1 });
+    if (!res || res.issues === undefined) throw new Error('Invalid response');
     await loadAllData();
     document.getElementById('connect-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
@@ -621,16 +621,7 @@ async function fetchAllIssues() {
 }
 
 async function loadAllData() {
-  // Load users (admin endpoint)
-  try {
-    const uData = await rmFetch('/users.json', { status: 1, limit: 100 });
-    state.users = uData.users || [];
-  } catch(e) {
-    // fallback: extract from issues
-    state.users = [];
-  }
-
-  // Load issues
+  // Load issues first (no admin rights needed)
   let allIssues = [], offset = 0, limit = 100;
   let total = Infinity;
   while (allIssues.length < total) {
@@ -645,16 +636,20 @@ async function loadAllData() {
   }
   state.issues = allIssues;
 
-  // Extract unique assignees if users endpoint failed
-  if (!state.users.length) {
-    const seen = new Map();
-    allIssues.forEach(i => {
-      if (i.assigned_to && !seen.has(i.assigned_to.id)) {
-        seen.set(i.assigned_to.id, { id: i.assigned_to.id, login: i.assigned_to.name, firstname: i.assigned_to.name, lastname: '', mail: '' });
-      }
-    });
-    state.users = Array.from(seen.values());
-  }
+  // Extract unique assignees from issues (no admin endpoint needed)
+  const seen = new Map();
+  allIssues.forEach(i => {
+    if (i.assigned_to && !seen.has(i.assigned_to.id)) {
+      seen.set(i.assigned_to.id, {
+        id: i.assigned_to.id,
+        login: i.assigned_to.name,
+        firstname: i.assigned_to.name,
+        lastname: '',
+        mail: ''
+      });
+    }
+  });
+  state.users = Array.from(seen.values());
 
   // Load projects
   try {
