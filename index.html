@@ -356,9 +356,10 @@ tr:hover td{background:var(--s2);color:var(--t1);}
 .sprint-card{background:var(--s1);border:1px solid var(--b1);border-radius:14px;padding:1.2rem;margin-bottom:.8rem;transition:all .2s;}
 .sprint-card:hover{border-color:var(--b2);transform:translateX(3px);}
 
-/* ════════════════════════════════════════
-   SCROLLBAR
-════════════════════════════════════════ */
+/* ── INLINE PROJECT PANEL ── */
+#proj-panel{transform:translateX(100%);opacity:0;transition:transform .28s cubic-bezier(.4,0,.2,1),opacity .28s;will-change:transform;}
+#proj-panel[style*="flex"]{transform:translateX(0)!important;opacity:1!important;}
+@media(max-width:768px){#proj-panel{width:100%!important;}}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px;}
@@ -422,7 +423,7 @@ tr:hover td{background:var(--s2);color:var(--t1);}
   </div>
 </div>
 
-<!-- ══ PROJECT PICKER ══ -->
+<!-- ══ PROJECT PICKER ══ (kept as full-screen for first-time connect only) -->
 <div id="screen-proj" class="auth" style="display:none">
   <div class="auth-grid"></div>
   <div class="auth-mesh"></div>
@@ -442,13 +443,44 @@ tr:hover td{background:var(--s2);color:var(--t1);}
       </div>
     </div>
     <button class="btn btn-p btn-full" onclick="confirmPj()">Load Dashboard →</button>
-    <div id="back-btn-wrap" style="text-align:center;margin-top:.8rem;display:none">
-      <a href="#" onclick="backToApp()" style="font-size:.76rem;color:var(--t3);text-decoration:none;">← Back to dashboard</a>
-    </div>
   </div>
 </div>
 
 <div class="mob-bg" id="mob-bg" onclick="closeSb()"></div>
+
+<!-- ══ INLINE PROJECT PANEL (slide-over within app) ══ -->
+<div id="proj-panel-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);z-index:150;" onclick="closeProjPanel()"></div>
+<div id="proj-panel" style="display:none;position:fixed;top:0;right:0;bottom:0;width:400px;background:var(--s1);border-left:1px solid var(--b2);z-index:151;flex-direction:column;box-shadow:-12px 0 48px rgba(0,0,0,.4);">
+  <!-- Panel header -->
+  <div style="padding:1.1rem 1.4rem;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;background:var(--s2);">
+    <div>
+      <div style="font-size:1rem;font-weight:800;letter-spacing:-.4px">📂 Projects</div>
+      <div style="font-size:.7rem;color:var(--t3);margin-top:.15rem">Select which projects to include</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="closeProjPanel()" style="width:30px;height:30px;padding:0;justify-content:center;font-size:.9rem">✕</button>
+  </div>
+  <!-- Search -->
+  <div style="padding:.85rem 1.4rem .5rem">
+    <input class="inp" id="pj-panel-search" placeholder="Search projects…" oninput="filterPjPanel()" style="margin-bottom:0"/>
+  </div>
+  <!-- Select all / clear row -->
+  <div style="padding:.3rem 1.4rem .5rem;display:flex;justify-content:space-between;align-items:center">
+    <span id="pj-panel-count" style="font-size:.7rem;color:var(--t3);font-family:'JetBrains Mono',monospace"></span>
+    <div style="display:flex;gap:.35rem">
+      <button class="btn btn-ghost btn-sm" onclick="pjAll();filterPjPanel()">All</button>
+      <button class="btn btn-ghost btn-sm" onclick="pjClear();filterPjPanel()">Clear</button>
+    </div>
+  </div>
+  <!-- Project list -->
+  <div id="pj-panel-list" style="flex:1;overflow-y:auto;border-top:1px solid var(--b1);border-bottom:1px solid var(--b1)"></div>
+  <!-- Footer action -->
+  <div style="padding:1rem 1.4rem">
+    <button class="btn btn-p btn-full" onclick="applyProjPanel()">Apply & Reload →</button>
+    <div style="text-align:center;margin-top:.6rem">
+      <span onclick="closeProjPanel()" style="font-size:.74rem;color:var(--t3);cursor:pointer;text-decoration:underline">Cancel — keep current selection</span>
+    </div>
+  </div>
+</div>
 
 <!-- ══ APP ══ -->
 <div id="app" style="display:none">
@@ -462,7 +494,7 @@ tr:hover td{background:var(--s2);color:var(--t1);}
     </div>
 
     <!-- Project switcher -->
-    <div class="sb-proj-btn" onclick="openPjPicker()">
+    <div class="sb-proj-btn" onclick="openProjPanel()">
       <span class="sb-proj-btn-label">📂 Projects</span>
       <span class="sb-proj-btn-val" id="sb-proj-val">0 selected</span>
     </div>
@@ -684,7 +716,6 @@ async function doConnect(){
     else{
       document.getElementById('screen-connect').style.display='none';
       document.getElementById('screen-proj').style.display='flex';
-      document.getElementById('back-btn-wrap').style.display='none';
       renderPjList();
     }
   }catch(e){
@@ -707,35 +738,73 @@ function renderPjList(f=''){
   document.getElementById('pj-count').textContent=`${S.selProj.length} / ${S.allProjects.length} selected`;
 }
 function filterPj(){renderPjList(document.getElementById('pj-search').value);}
-function togPj(id){
+function togPj(id,fromPanel){
   const i=S.selProj.indexOf(id);
   if(i===-1)S.selProj.push(id);else S.selProj.splice(i,1);
   localStorage.setItem('vg_proj',JSON.stringify(S.selProj));
-  renderPjList(document.getElementById('pj-search').value);
+  if(fromPanel)filterPjPanel();
+  else renderPjList(document.getElementById('pj-search')?.value||'');
 }
-function pjAll(){S.selProj=S.allProjects.map(p=>p.identifier);localStorage.setItem('vg_proj',JSON.stringify(S.selProj));renderPjList();}
-function pjClear(){S.selProj=[];localStorage.setItem('vg_proj',JSON.stringify(S.selProj));renderPjList();}
+function pjAll(){S.selProj=S.allProjects.map(p=>p.identifier);localStorage.setItem('vg_proj',JSON.stringify(S.selProj));filterPjPanel();renderPjList();}
+function pjClear(){S.selProj=[];localStorage.setItem('vg_proj',JSON.stringify(S.selProj));filterPjPanel();renderPjList();}
 async function confirmPj(){
   if(!S.selProj.length){alert('Select at least one project.');return;}
-  if(S.fromApp){S.fromApp=false;await reloadWithNewProj();}
-  else{await launchApp();}
+  await launchApp();
 }
 function backToApp(){
-  S.fromApp=false;
   document.getElementById('screen-proj').style.display='none';
   document.getElementById('app').style.display='flex';
 }
 function openPjPicker(){
-  S.fromApp=true;
-  document.getElementById('app').style.display='none';
-  document.getElementById('screen-proj').style.display='flex';
-  document.getElementById('back-btn-wrap').style.display='block';
-  document.getElementById('pj-search').value='';
-  renderPjList();
+  // From first-time connect (no app yet): use full-screen picker
+  if(document.getElementById('app').style.display==='none'||document.getElementById('app').style.display===''){
+    document.getElementById('screen-proj').style.display='flex';
+    document.getElementById('pj-search').value='';
+    renderPjList();
+    return;
+  }
+  // From inside app: use inline slide panel
+  openProjPanel();
 }
+
+function openProjPanel(){
+  const overlay=document.getElementById('proj-panel-overlay');
+  const panel=document.getElementById('proj-panel');
+  overlay.style.display='block';
+  panel.style.display='flex';
+  // Small delay for animation feel
+  requestAnimationFrame(()=>{
+    panel.style.transform='translateX(0)';
+    panel.style.opacity='1';
+  });
+  document.getElementById('pj-panel-search').value='';
+  filterPjPanel();
+}
+function closeProjPanel(){
+  document.getElementById('proj-panel-overlay').style.display='none';
+  document.getElementById('proj-panel').style.display='none';
+}
+function filterPjPanel(){
+  const f=document.getElementById('pj-panel-search')?.value||'';
+  const list=S.allProjects.filter(p=>!f||p.name.toLowerCase().includes(f.toLowerCase())||p.identifier.toLowerCase().includes(f.toLowerCase()));
+  document.getElementById('pj-panel-list').innerHTML=list.map(p=>`
+    <div style="display:flex;align-items:center;gap:.7rem;padding:.6rem 1.4rem;cursor:pointer;border-bottom:1px solid var(--b1);transition:background .1s;" onclick="togPj('${p.identifier}',true)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''">
+      <input type="checkbox" ${S.selProj.includes(p.identifier)?'checked':''} readonly style="accent-color:var(--a);width:15px;height:15px;flex-shrink:0;pointer-events:none"/>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.83rem;font-weight:${S.selProj.includes(p.identifier)?'700':'500'};color:${S.selProj.includes(p.identifier)?'var(--a)':'var(--t1)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+        <div style="font-size:.65rem;color:var(--t3);font-family:'JetBrains Mono',monospace">${p.identifier}</div>
+      </div>
+      <span style="font-size:.66rem;font-family:'JetBrains Mono',monospace;color:var(--t3);flex-shrink:0">${S.issues.filter(i=>i.project?.identifier===p.identifier).length||''}</span>
+    </div>`).join('')||'<div style="padding:1.5rem;text-align:center;color:var(--t3);font-size:.82rem">No projects found</div>';
+  document.getElementById('pj-panel-count').textContent=`${S.selProj.length} / ${S.allProjects.length} selected`;
+}
+async function applyProjPanel(){
+  if(!S.selProj.length){alert('Select at least one project.');return;}
+  closeProjPanel();
+  await reloadWithNewProj();
+}
+
 async function reloadWithNewProj(){
-  document.getElementById('screen-proj').style.display='none';
-  document.getElementById('app').style.display='flex';
   setLoadingDash();
   S.issues=[];S.users=[];S.versions=[];
   renderTeamNav();renderDashTabs();
@@ -957,28 +1026,58 @@ function renderDash(){
       <div class="stat"><div class="stat-bg" style="background:var(--a2)"></div><span class="stat-ico">○</span><div class="stat-lbl">Unassigned</div><div class="stat-n sv pnk">${una.toLocaleString()}</div></div>
     </div>
     <div class="g2">
-      <div class="card"><div class="ctitle">Status Breakdown</div><div class="ch"><canvas id="d-s"></canvas></div></div>
-      <div class="card"><div class="ctitle">Member Workload<span class="csub"> top 10</span></div><div class="ch"><canvas id="d-w"></canvas></div></div>
+      <div class="card"><div class="ctitle">Status Breakdown</div><div class="ch" style="height:300px"><canvas id="d-s"></canvas></div></div>
+      <div class="card"><div class="ctitle">Member Workload<span class="csub"> top 10</span></div><div class="ch" style="height:300px"><canvas id="d-w"></canvas></div></div>
     </div>
     ${odList.length?`<div class="card" style="border-color:rgba(239,68,68,.2);margin-bottom:1.2rem">
-      <div class="ctitle" style="color:var(--danger)">⚠ Overdue <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${odList.length})</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem">
+        <div class="ctitle" style="color:var(--danger);margin-bottom:0">⚠ Overdue Issues <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${odList.length} total)</span></div>
+        <span style="font-size:.7rem;color:var(--t3);font-family:'JetBrains Mono',monospace">Showing 50 per page</span>
+      </div>
       <div class="tw"><table><thead><tr><th>#</th><th>Title</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead>
-      <tbody>${odList.slice(0,20).map(i=>`<tr class="od-row">
-        <td><a href="${S.url}/issues/${i.id}" target="_blank" style="color:var(--a);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.72rem">#${i.id}</a></td>
-        <td style="color:var(--t1)">${i.subject.slice(0,58)}${i.subject.length>58?'…':''}</td>
-        <td>${i.assigned_to?.name||'—'}</td>
-        <td style="color:var(--danger);font-family:'JetBrains Mono',monospace;font-size:.72rem">${i.due_date}</td>
-        <td>${sbadge(i.status?.name)}</td>
-      </tr>`).join('')}</tbody></table></div>
+      <tbody id="od-tbody"></tbody></table></div>
+      <div id="od-pages"></div>
     </div>`:''}`;
+
+  // render overdue table with pagination
+  odPage=0; _odList=odList;
+  renderOdTable();
 
   const tc=getCSS('--t1'),t2=getCSS('--t2'),t3=getCSS('--t3');
   setTimeout(()=>{
     const sc=document.getElementById('d-s');
-    if(sc)DC.s=new Chart(sc,{type:'doughnut',data:{labels:Object.keys(sMap),datasets:[{data:Object.values(sMap),backgroundColor:CLRS.map(c=>c+'cc'),borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'right',labels:{color:tc,font:{family:'Inter',size:11},boxWidth:9,padding:9}}}}});
+    if(sc)DC.s=new Chart(sc,{type:'doughnut',data:{labels:Object.keys(sMap),datasets:[{data:Object.values(sMap),backgroundColor:CLRS.map(c=>c+'cc'),borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',layout:{padding:{bottom:4}},plugins:{legend:{position:'bottom',align:'start',labels:{color:tc,font:{family:'Inter',size:10},boxWidth:10,padding:10,generateLabels:(chart)=>{const ds=chart.data.datasets[0];return chart.data.labels.map((l,i)=>({text:l.length>20?l.slice(0,20)+'…':l,fillStyle:ds.backgroundColor[i],strokeStyle:ds.backgroundColor[i],lineWidth:0,hidden:false,index:i}));}}}}}}});
     const wc=document.getElementById('d-w');
     if(wc){const sorted=Object.entries(mMap).sort((a,b)=>b[1]-a[1]).slice(0,10);DC.w=new Chart(wc,{type:'bar',data:{labels:sorted.map(([n])=>n.split(' ')[0]),datasets:[{data:sorted.map(([,v])=>v),backgroundColor:CLRS.map(c=>c+'44'),borderColor:CLRS,borderWidth:1.5,borderRadius:7,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{color:t3,font:{size:10}},grid:{color:getCSS('--b1')}},y:{ticks:{color:tc,font:{size:10}},grid:{display:false}}}}});}
   },50);
+}
+
+let odPage=0;const odPerPage=50;
+let _odList=[];
+function renderOdTable(){
+  const odEl=document.getElementById('od-tbody');
+  const odPg=document.getElementById('od-pages');
+  if(!odEl)return;
+  const slice=_odList.slice(odPage*odPerPage,(odPage+1)*odPerPage);
+  odEl.innerHTML=slice.map(i=>`<tr class="od-row">
+    <td><a href="${S.url}/issues/${i.id}" target="_blank" style="color:var(--a);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.72rem">#${i.id}</a></td>
+    <td style="color:var(--t1)">${i.subject.slice(0,65)}${i.subject.length>65?'…':''}</td>
+    <td>${i.assigned_to?.name||'<span style="color:var(--t3)">—</span>'}</td>
+    <td style="color:var(--danger);font-family:'JetBrains Mono',monospace;font-size:.72rem">${i.due_date}</td>
+    <td>${sbadge(i.status?.name)}</td>
+  </tr>`).join('');
+  const tp=Math.ceil(_odList.length/odPerPage);
+  if(!odPg)return;
+  if(tp<=1){odPg.innerHTML='';return;}
+  odPg.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;padding:.65rem 1rem;border-top:1px solid var(--b1);background:var(--s2);border-radius:0 0 12px 12px">
+    <span style="font-size:.7rem;color:var(--t3);font-family:'JetBrains Mono',monospace">${_odList.length} overdue · page ${odPage+1} of ${tp}</span>
+    <div style="display:flex;gap:.35rem">
+      ${odPage>0?`<button class="btn btn-ghost btn-sm" onclick="odPage--;renderOdTable()">← Prev</button>`:''}
+      ${Array.from({length:Math.min(tp,7)},(_,i)=>`<button class="btn btn-sm ${i===odPage?'btn-p':'btn-ghost'}" onclick="odPage=${i};renderOdTable()">${i+1}</button>`).join('')}
+      ${tp>7?`<span style="font-size:.72rem;color:var(--t3);align-self:center">…${tp}</span>`:''}
+      ${odPage<tp-1?`<button class="btn btn-ghost btn-sm" onclick="odPage++;renderOdTable()">Next →</button>`:''}
+    </div>
+  </div>`;
 }
 
 // ── USER SEARCH ───────────────────────────────
