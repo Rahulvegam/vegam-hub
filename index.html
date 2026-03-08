@@ -968,6 +968,7 @@ function setChip(pid,done,count){
 
 // ── LOAD ALL DATA ─────────────────────────────
 async function loadAll(){
+  const projs=S.selProj.length?S.selProj:[''];
   const seen=new Set();S.issues=[];
   const rebuildUsers=()=>{
     const m=new Map();
@@ -977,65 +978,57 @@ async function loadAll(){
   const merge=arr=>{
     let added=0;
     arr.forEach(i=>{if(!seen.has(i.id)){seen.add(i.id);S.issues.push(i);added++;}});
-    if(added>0)rebuildUsers();
+    if(added)rebuildUsers();
   };
 
-  // ── Strategy: fetch globally (no project_id filter) then filter client-side
-  // This is MUCH faster than 100 × N requests — 1 stream of pages covers everything
-  const selSet=new Set(S.selProj);
-  const filterByProj=(issues)=> S.selProj.length
-    ? issues.filter(i=>selSet.has(i.project?.identifier))
-    : issues;
+  updLoad(5,'Fetching projects…');
 
-  updLoad(5,'Fetching issues…');
+  // Round 1 — page 1 of ALL projects simultaneously → get first 100 issues per project + total_count
+  const round1=await Promise.all(
+    projs.map(pid=>
+      api('/issues.json',{limit:100,offset:0,status_id:'*',...(pid?{project_id:pid}:{})})
+        .catch(()=>({issues:[],total_count:0}))
+    )
+  );
 
-  // Step 1 — fire first page to get total count, then immediately fire all remaining in parallel
-  let firstPage;
-  try{
-    firstPage=await api('/issues.json',{limit:100,offset:0,status_id:'*'});
-  }catch(e){
-    updLoad(0,'Connection error — retrying…');
-    await new Promise(r=>setTimeout(r,1500));
-    firstPage=await api('/issues.json',{limit:100,offset:0,status_id:'*'});
-  }
+  // Collect all remaining page offsets across every project
+  const allOffsets=[];
+  round1.forEach((res,idx)=>{
+    const pid=projs[idx];
+    merge(res.issues||[]);
+    const total=res.total_count||0;
+    for(let o=100;o<total;o+=100) allOffsets.push({pid,o});
+  });
 
-  const total=firstPage.total_count||0;
-  const totalPages=Math.ceil(total/100);
-  merge(filterByProj(firstPage.issues||[]));
-  updLoad(10,`${S.issues.length.toLocaleString()} issues — loading ${total.toLocaleString()} total…`);
+  updLoad(20,`${S.issues.length.toLocaleString()} issues — loading more…`);
   updateSbMeta();
-  renderApp(); // ← show data immediately after first page
+  renderApp(); // ← dashboard visible NOW with first-page data
 
-  if(totalPages<=1){
+  if(!allOffsets.length){
     updLoad(100,`✓ ${S.issues.length.toLocaleString()} issues loaded`);
     setTimeout(()=>setFetch(false),1500);
-    S.lastRefresh=new Date();updateSync();updateSbMeta();
-    renderApp();
+    S.lastRefresh=new Date();updateSync();updateSbMeta();renderApp();
     return;
   }
 
-  // Step 2 — fire ALL remaining pages in one big parallel burst (batched 25 at a time to avoid throttle)
-  const offsets=[];
-  for(let o=100;o<total;o+=100)offsets.push(o);
-
-  const BATCH=25; // 25 parallel = fast but won't hammer the proxy
-  for(let i=0;i<offsets.length;i+=BATCH){
-    const chunk=offsets.slice(i,i+BATCH);
+  // Round 2 — fire ALL remaining pages across ALL projects, batched 30 at a time
+  const BATCH=30;
+  for(let i=0;i<allOffsets.length;i+=BATCH){
+    const chunk=allOffsets.slice(i,i+BATCH);
     const results=await Promise.all(
-      chunk.map(offset=>
-        api('/issues.json',{limit:100,offset,status_id:'*'})
-          .then(d=>d.issues||[])
-          .catch(()=>[])
+      chunk.map(({pid,o})=>
+        api('/issues.json',{limit:100,offset:o,status_id:'*',...(pid?{project_id:pid}:{})})
+          .then(d=>d.issues||[]).catch(()=>[])
       )
     );
-    results.forEach(r=>merge(filterByProj(r)));
-    const pct=Math.min(93,10+((i+chunk.length)/offsets.length)*83);
-    updLoad(pct,`${S.issues.length.toLocaleString()} / ~${total.toLocaleString()} issues…`);
+    results.forEach(r=>merge(r));
+    const pct=20+Math.round(((i+chunk.length)/allOffsets.length)*72);
+    updLoad(pct,`${S.issues.length.toLocaleString()} issues loaded…`);
     updateSbMeta();
-    liveUpdate(); // re-render active view with new data
+    liveUpdate();
   }
 
-  // Step 3 — versions (fire all in parallel, non-blocking)
+  // Round 3 — versions (background)
   try{
     const vr=await Promise.all(S.selProj.map(pid=>api('/projects/'+pid+'/versions.json').then(d=>d.versions||[]).catch(()=>[])));
     S.versions=vr.flat();
