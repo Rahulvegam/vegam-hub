@@ -638,23 +638,39 @@ tr:hover td{background:var(--s2);color:var(--t1);}
           <button class="btn btn-p btn-sm" onclick="openModal()">+ New Team</button>
         </div>
 
-        <!-- TRACKER FOCUS CONFIG -->
-        <div class="card" style="margin-bottom:1.2rem;border:1.5px dashed var(--b2);background:linear-gradient(135deg,rgba(99,102,241,.04),rgba(236,72,153,.03))">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
-            <div>
-              <div style="font-size:.85rem;font-weight:700;letter-spacing:-.2px">⚡ Tracker Focus</div>
-              <div style="font-size:.72rem;color:var(--t2);margin-top:.1rem">Select trackers to track per team on the dashboard. Applies to all teams globally.</div>
+        <!-- TEAM ASSIGNMENT PANEL (slide-in) -->
+        <div id="assign-overlay" onclick="closeAssignPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1100;backdrop-filter:blur(4px)"></div>
+        <div id="assign-panel" style="display:none;position:fixed;top:0;right:0;width:480px;max-width:95vw;height:100vh;background:var(--s1);border-left:1px solid var(--b2);z-index:1101;overflow-y:auto;box-shadow:-8px 0 40px rgba(0,0,0,.3);flex-direction:column">
+          <div style="padding:1.4rem 1.4rem .8rem;border-bottom:1px solid var(--b1);position:sticky;top:0;background:var(--s1);z-index:2">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem">
+              <div style="font-size:.95rem;font-weight:800;letter-spacing:-.3px">⚡ Assign Focus</div>
+              <button class="btn btn-ghost btn-sm" onclick="closeAssignPanel()">✕ Close</button>
             </div>
-            <div style="display:flex;gap:.4rem">
-              <button class="btn btn-ghost btn-sm" onclick="selAllTrackers()">All</button>
-              <button class="btn btn-ghost btn-sm" onclick="clearTrackers()">Clear</button>
-              <button class="btn btn-p btn-sm" onclick="saveTrackerFocus()">Save Focus</button>
+            <div id="assign-panel-subtitle" style="font-size:.72rem;color:var(--t2)"></div>
+          </div>
+          <div style="padding:1.2rem 1.4rem">
+            <!-- Trackers -->
+            <div style="font-size:.78rem;font-weight:700;margin-bottom:.55rem;letter-spacing:-.2px">Tracker Types</div>
+            <div style="font-size:.7rem;color:var(--t2);margin-bottom:.65rem">Select tracker types to monitor for this team</div>
+            <div id="ap-tracker-chips" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.2rem;min-height:28px"></div>
+            <div style="border-top:1px solid var(--b1);margin-bottom:1.2rem"></div>
+            <!-- Specific Issues -->
+            <div style="font-size:.78rem;font-weight:700;margin-bottom:.55rem;letter-spacing:-.2px">Specific Issues</div>
+            <div style="font-size:.7rem;color:var(--t2);margin-bottom:.65rem">Search and pin specific issues to this team's focus dashboard</div>
+            <div style="display:flex;gap:.5rem;margin-bottom:.65rem">
+              <input id="ap-iss-search" class="inp" placeholder="Search by title or #ID…" oninput="filterAssignIss()" style="margin:0;flex:1;font-size:.8rem"/>
+              <select id="ap-iss-tracker" class="inp" onchange="filterAssignIss()" style="margin:0;width:130px;font-size:.78rem;padding:.4rem .6rem">
+                <option value="">All Trackers</option>
+              </select>
             </div>
+            <div id="ap-iss-list" style="max-height:280px;overflow-y:auto;border:1px solid var(--b1);border-radius:10px"></div>
+            <div style="margin-top:.8rem;font-size:.7rem;color:var(--t2)">Selected: <span id="ap-sel-count" style="font-weight:700;color:var(--a)">0</span> issues</div>
+            <div id="ap-sel-chips" style="display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.5rem;max-height:100px;overflow-y:auto"></div>
           </div>
-          <div id="tracker-chips" style="display:flex;flex-wrap:wrap;gap:.45rem;min-height:32px">
-            <span style="font-size:.75rem;color:var(--t3);align-self:center">Loading trackers…</span>
+          <div style="padding:1rem 1.4rem;border-top:1px solid var(--b1);position:sticky;bottom:0;background:var(--s1);display:flex;gap:.6rem;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" onclick="closeAssignPanel()">Cancel</button>
+            <button class="btn btn-p btn-sm" onclick="saveAssign()">Save Focus →</button>
           </div>
-          <div id="tracker-focus-saved" style="display:none;font-size:.7rem;color:var(--ok);margin-top:.6rem;font-family:'JetBrains Mono',monospace">✓ Tracker focus saved</div>
         </div>
 
         <div class="tgrid" id="t-grid"></div>
@@ -694,7 +710,7 @@ let S={
   issues:[],users:[],versions:[],allProjects:[],
   teams:JSON.parse(localStorage.getItem('vg_teams')||'[]'),
   selProj:JSON.parse(localStorage.getItem('vg_proj')||'[]'),
-  focusTrackers:JSON.parse(localStorage.getItem('vg_focus_trackers')||'[]'),
+  focusTrackers:[],// legacy — now per-team via team.focus
   curTeam:'all',curUser:null,
   editTeam:null,selColor:CLRS[0],selMems:new Set(),
   calY:new Date().getFullYear(),calM:new Date().getMonth(),
@@ -1024,7 +1040,6 @@ async function doRefresh(){
 // ── RENDER APP ────────────────────────────────
 function renderApp(){
   renderTeamNav();renderDashTabs();renderTeamsGrid();renderIssFilters();populateCalTm();
-  renderTrackerChips();
   liveUpdate();
 }
 
@@ -1042,7 +1057,7 @@ function go(name){
   else if(name==='cal')renderCal();
   else if(name==='issues'){renderIssFilters();renderIss();}
   else if(name==='dash')renderDash();
-  else if(name==='teams'){renderTeamsGrid();renderTrackerChips();}
+  else if(name==='teams'){renderTeamsGrid();}
 }
 function openSb(){document.getElementById('sidebar').classList.add('open');document.getElementById('mob-bg').classList.add('on');}
 function closeSb(){document.getElementById('sidebar').classList.remove('open');document.getElementById('mob-bg').classList.remove('on');}
@@ -1125,8 +1140,11 @@ function renderDash(){
   odPage=0; _odList=odList;
   renderOdTable();
 
-  // render tracker focus panel if team selected + trackers configured
-  if(S.curTeam!=='all'&&S.focusTrackers.length) renderTrackerFocusDash(iss);
+  // render tracker focus panel if team selected + team has focus configured
+  const curTeamObj=S.teams.find(t=>t.id==S.curTeam);
+  const teamFocus=curTeamObj?.focus||{trackers:[],issues:[]};
+  const hasFocus=S.curTeam!=='all'&&(teamFocus.trackers.length||teamFocus.issues.length);
+  if(hasFocus) renderTrackerFocusDash(iss,teamFocus,curTeamObj);
 
   const tc=getCSS('--t1'),t2=getCSS('--t2'),t3=getCSS('--t3');
   setTimeout(()=>{
@@ -1135,7 +1153,7 @@ function renderDash(){
     const wc=document.getElementById('d-w');
     if(wc){const sorted=Object.entries(mMap).sort((a,b)=>b[1]-a[1]).slice(0,10);DC.w=new Chart(wc,{type:'bar',data:{labels:sorted.map(([n])=>n.split(' ')[0]),datasets:[{data:sorted.map(([,v])=>v),backgroundColor:CLRS.map(c=>c+'44'),borderColor:CLRS,borderWidth:1.5,borderRadius:7,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{color:t3,font:{size:10}},grid:{color:getCSS('--b1')}},y:{ticks:{color:tc,font:{size:10}},grid:{display:false}}}}});}
     // render tracker focus charts after main charts
-    if(S.curTeam!=='all'&&S.focusTrackers.length) renderTrackerFocusCharts(iss);
+    if(hasFocus) renderTrackerFocusCharts(iss,teamFocus);
   },80);
 }
 
@@ -1167,41 +1185,136 @@ function renderOdTable(){
   </div>`;
 }
 
-// ── TRACKER FOCUS ─────────────────────────────
+// ── TRACKER FOCUS (per-team) ──────────────────
 let _tfCharts={};
+let _assignTeamId=null;
+let _apSelTrackers=new Set();
+let _apSelIssues=new Set();
 
-function renderTrackerChips(){
-  const el=document.getElementById('tracker-chips');
+function openAssignPanel(tid){
+  _assignTeamId=tid;
+  const team=S.teams.find(t=>t.id==tid);
+  if(!team)return;
+  const focus=team.focus||{trackers:[],issues:[]};
+  _apSelTrackers=new Set(focus.trackers);
+  _apSelIssues=new Set(focus.issues);
+
+  document.getElementById('assign-panel-subtitle').textContent=`Configuring focus for: ${team.name}`;
+  document.getElementById('assign-overlay').style.display='block';
+  document.getElementById('assign-panel').style.display='flex';
+
+  // Render tracker chips
+  renderAPTrackerChips();
+
+  // Populate tracker filter dropdown
+  const trackers=[...new Set(S.issues.map(i=>i.tracker?.name).filter(Boolean))].sort();
+  const tSel=document.getElementById('ap-iss-tracker');
+  tSel.innerHTML='<option value="">All Trackers</option>'+trackers.map(t=>`<option value="${t}">${t}</option>`).join('');
+
+  document.getElementById('ap-iss-search').value='';
+  filterAssignIss();
+  renderAPSelChips();
+}
+
+function closeAssignPanel(){
+  document.getElementById('assign-overlay').style.display='none';
+  document.getElementById('assign-panel').style.display='none';
+  _assignTeamId=null;
+}
+
+function renderAPTrackerChips(){
+  const el=document.getElementById('ap-tracker-chips');
   if(!el)return;
   const trackers=[...new Set(S.issues.map(i=>i.tracker?.name).filter(Boolean))].sort();
-  if(!trackers.length){el.innerHTML='<span style="font-size:.75rem;color:var(--t3)">No trackers found — load issues first</span>';return;}
-  el.innerHTML=trackers.map(t=>`
-    <div class="tr-chip${S.focusTrackers.includes(t)?' on':''}" onclick="togTracker('${t}')">${t}</div>
-  `).join('');
+  el.innerHTML=trackers.map(t=>`<div class="tr-chip${_apSelTrackers.has(t)?' on':''}" onclick="togAPTracker('${t}')">${t}</div>`).join('');
 }
 
-function togTracker(name){
-  if(S.focusTrackers.includes(name)) S.focusTrackers=S.focusTrackers.filter(t=>t!==name);
-  else S.focusTrackers.push(name);
-  renderTrackerChips();
-}
-function selAllTrackers(){
-  S.focusTrackers=[...new Set(S.issues.map(i=>i.tracker?.name).filter(Boolean))];
-  renderTrackerChips();
-}
-function clearTrackers(){S.focusTrackers=[];renderTrackerChips();}
-function saveTrackerFocus(){
-  localStorage.setItem('vg_focus_trackers',JSON.stringify(S.focusTrackers));
-  const el=document.getElementById('tracker-focus-saved');
-  if(el){el.style.display='block';setTimeout(()=>el.style.display='none',2500);}
+function togAPTracker(name){
+  if(_apSelTrackers.has(name))_apSelTrackers.delete(name);
+  else _apSelTrackers.add(name);
+  renderAPTrackerChips();
 }
 
-function renderTrackerFocusDash(teamIss){
+function filterAssignIss(){
+  const q=(document.getElementById('ap-iss-search')?.value||'').toLowerCase();
+  const tf=document.getElementById('ap-iss-tracker')?.value||'';
+  const el=document.getElementById('ap-iss-list');
+  if(!el)return;
+  let iss=S.issues;
+  if(tf)iss=iss.filter(i=>i.tracker?.name===tf);
+  if(q)iss=iss.filter(i=>i.subject.toLowerCase().includes(q)||String(i.id).includes(q));
+  iss=iss.slice(0,80);
+  if(!iss.length){el.innerHTML='<div style="padding:.8rem 1rem;font-size:.75rem;color:var(--t3)">No issues match</div>';return;}
+  el.innerHTML=iss.map(i=>{
+    const sel=_apSelIssues.has(i.id);
+    const od=i.due_date&&new Date(i.due_date)<new Date()&&!isClosed(i);
+    return`<div onclick="togAPIss(${i.id})" style="display:flex;align-items:center;gap:.65rem;padding:.5rem .9rem;cursor:pointer;border-bottom:1px solid var(--b1);background:${sel?'rgba(99,102,241,.07)':'transparent'};transition:background .12s">
+      <input type="checkbox" ${sel?'checked':''} readonly style="flex-shrink:0;accent-color:var(--a)"/>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.72rem;font-family:'JetBrains Mono',monospace;color:var(--a)">#${i.id}</div>
+        <div style="font-size:.78rem;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i.subject}</div>
+      </div>
+      <div style="flex-shrink:0;text-align:right">
+        <span class="chip" style="font-size:.6rem">${i.tracker?.name||'?'}</span>
+        ${od?'<span style="display:block;font-size:.6rem;color:var(--danger);margin-top:.2rem">OD</span>':''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function togAPIss(id){
+  if(_apSelIssues.has(id))_apSelIssues.delete(id);
+  else _apSelIssues.add(id);
+  filterAssignIss();
+  renderAPSelChips();
+}
+
+function renderAPSelChips(){
+  const cnt=document.getElementById('ap-sel-count');
+  const chips=document.getElementById('ap-sel-chips');
+  if(cnt)cnt.textContent=_apSelIssues.size;
+  if(!chips)return;
+  if(!_apSelIssues.size){chips.innerHTML='';return;}
+  chips.innerHTML=[..._apSelIssues].map(id=>{
+    const i=S.issues.find(x=>x.id===id);
+    return`<span class="chip" style="font-size:.65rem;cursor:pointer" onclick="togAPIss(${id})" title="Click to remove">#${id}${i?' — '+i.subject.slice(0,22)+'…':''} ✕</span>`;
+  }).join('');
+}
+
+function saveAssign(){
+  const team=S.teams.find(t=>t.id==_assignTeamId);
+  if(!team)return;
+  team.focus={trackers:[..._apSelTrackers],issues:[..._apSelIssues]};
+  saveTeams();
+  closeAssignPanel();
+  renderTeamsGrid();
+  // re-render dashboard if this team is currently active
+  if(S.curTeam==_assignTeamId) renderDash();
+}
+
+function renderTrackerFocusDash(teamIss, focus, team){
   const el=document.getElementById('tracker-focus-dash');
-  if(!el||!S.focusTrackers.length)return;
+  if(!el)return;
   const today=new Date();today.setHours(0,0,0,0);
-  const fIss=teamIss.filter(i=>S.focusTrackers.includes(i.tracker?.name));
-  if(!fIss.length){el.innerHTML=`<div class="card" style="border-color:var(--a);opacity:.6;text-align:center;padding:2rem"><div style="font-size:.85rem;color:var(--t2)">No issues found for focused trackers (${S.focusTrackers.join(', ')}) in this team.</div></div>`;return;}
+  const teamColor=team?.color||'var(--a)';
+
+  // Combine: issues matching selected trackers OR specifically pinned issues
+  const pinnedIds=new Set(focus.issues||[]);
+  const selTrackers=new Set(focus.trackers||[]);
+  let fIss=S.issues.filter(i=>{
+    const inTeam=teamIss.includes(i); // must be in team's member set
+    const byTracker=selTrackers.size&&selTrackers.has(i.tracker?.name);
+    const byPin=pinnedIds.has(i.id);
+    return byTracker||byPin; // show pinned issues regardless of team membership
+  });
+  // deduplicate
+  fIss=[...new Map(fIss.map(i=>[i.id,i])).values()];
+
+  if(!fIss.length){
+    el.innerHTML=`<div class="card" style="border-color:var(--a);opacity:.6;text-align:center;padding:2rem;margin-top:1rem">
+      <div style="font-size:.85rem;color:var(--t2)">No issues found for the configured focus. Go to <strong>Manage Teams → ⚡ Focus</strong> to update.</div>
+    </div>`;return;
+  }
 
   const total=fIss.length;
   const open=fIss.filter(i=>!isClosed(i)).length;
@@ -1210,32 +1323,26 @@ function renderTrackerFocusDash(teamIss){
   const od=fIss.filter(i=>i.due_date&&new Date(i.due_date)<today&&!isClosed(i)).length;
   const pct=total?Math.round(closed/total*100):0;
 
-  // Member workload for focused trackers
   const mMap={};
   fIss.forEach(i=>{if(i.assigned_to&&!isClosed(i)){const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;}});
 
-  // Per-tracker breakdown
   const tMap={};
   fIss.forEach(i=>{const t=i.tracker?.name||'?';if(!tMap[t])tMap[t]={total:0,open:0,closed:0,od:0};tMap[t].total++;if(isClosed(i))tMap[t].closed++;else{tMap[t].open++;if(i.due_date&&new Date(i.due_date)<today)tMap[t].od++;}});
 
-  // Overdue issues for focused trackers
   const odIss=fIss.filter(i=>i.due_date&&new Date(i.due_date)<today&&!isClosed(i));
-
-  const team=S.teams.find(t=>t.id==S.curTeam);
-  const teamColor=team?.color||'var(--a)';
 
   el.innerHTML=`
     <div style="margin-top:1.5rem">
       <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap">
         <div style="width:3px;height:22px;border-radius:2px;background:${teamColor};flex-shrink:0"></div>
-        <div style="font-size:.95rem;font-weight:800;letter-spacing:-.3px">⚡ Tracker Focus</div>
-        <div style="display:flex;gap:.35rem;flex-wrap:wrap">
-          ${S.focusTrackers.map(t=>`<span class="tr-chip on" style="font-size:.65rem;padding:.15rem .55rem;cursor:default">${t}</span>`).join('')}
+        <div style="font-size:.95rem;font-weight:800;letter-spacing:-.3px">⚡ Focus Dashboard</div>
+        <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+          ${[...selTrackers].map(t=>`<span class="tr-chip on" style="font-size:.6rem;padding:.12rem .5rem;cursor:default">${t}</span>`).join('')}
+          ${pinnedIds.size?`<span class="chip" style="font-size:.62rem">${pinnedIds.size} pinned</span>`:''}
         </div>
-        <span style="font-size:.7rem;color:var(--t3);margin-left:auto">${team?.name||''}</span>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:.68rem" onclick="openAssignPanel('${team.id}')">Edit Focus</button>
       </div>
 
-      <!-- Stats row -->
       <div class="stats" style="margin-bottom:1rem">
         <div class="stat"><span class="stat-ico">📦</span><div class="stat-lbl">Total</div><div class="stat-n sv">${total}</div></div>
         <div class="stat"><span class="stat-ico">🔓</span><div class="stat-lbl">Open</div><div class="stat-n sv ora">${open}</div><div class="stat-hint">${total?Math.round(open/total*100):0}%</div></div>
@@ -1244,7 +1351,6 @@ function renderTrackerFocusDash(teamIss){
         <div class="stat"><span class="stat-ico">⚠</span><div class="stat-lbl">Overdue</div><div class="stat-n sv red">${od}</div></div>
       </div>
 
-      <!-- Progress bar -->
       <div class="card" style="margin-bottom:1rem;padding:1rem 1.2rem">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
           <span style="font-size:.78rem;font-weight:600">Overall Completion</span>
@@ -1256,26 +1362,24 @@ function renderTrackerFocusDash(teamIss){
         </div>
       </div>
 
-      <!-- Per-tracker cards -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.75rem;margin-bottom:1rem">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.7rem;margin-bottom:1rem">
         ${Object.entries(tMap).map(([name,d],i)=>`
           <div class="card" style="border-left:2.5px solid ${CLRS[i%CLRS.length]}">
-            <div style="font-size:.65rem;font-weight:700;color:${CLRS[i%CLRS.length]};text-transform:uppercase;letter-spacing:.8px;margin-bottom:.4rem">${name}</div>
-            <div style="font-size:1.6rem;font-weight:900;letter-spacing:-1px;margin-bottom:.3rem">${d.total}</div>
-            <div style="display:flex;gap:.4rem;font-size:.68rem;margin-bottom:.5rem;flex-wrap:wrap">
+            <div style="font-size:.62rem;font-weight:700;color:${CLRS[i%CLRS.length]};text-transform:uppercase;letter-spacing:.8px;margin-bottom:.35rem">${name}</div>
+            <div style="font-size:1.5rem;font-weight:900;letter-spacing:-1px;margin-bottom:.25rem">${d.total}</div>
+            <div style="display:flex;gap:.4rem;font-size:.66rem;margin-bottom:.45rem;flex-wrap:wrap">
               <span style="color:var(--a4)">${d.open} open</span>
               <span style="color:var(--ok)">${d.closed} closed</span>
               ${d.od?`<span style="color:var(--danger)">${d.od} OD</span>`:''}
             </div>
             <div class="pbar"><div class="pbar-fill" style="background:${CLRS[i%CLRS.length]};width:${d.total?Math.round(d.closed/d.total*100):0}%"></div></div>
-            <div style="font-size:.62rem;color:var(--t3);margin-top:.25rem;font-family:'JetBrains Mono',monospace">${d.total?Math.round(d.closed/d.total*100):0}% done</div>
+            <div style="font-size:.6rem;color:var(--t3);margin-top:.25rem;font-family:'JetBrains Mono',monospace">${d.total?Math.round(d.closed/d.total*100):0}% done</div>
           </div>`).join('')}
       </div>
 
-      <!-- Member workload + Overdue side by side -->
       <div class="g2" style="margin-bottom:1rem">
         <div class="card">
-          <div class="ctitle">Member Workload${infoBtn('Active (non-closed) issues for focused trackers only, per member.')}</div>
+          <div class="ctitle">Member Workload${infoBtn('Active issues from focused trackers + pinned issues, per member.')}</div>
           <div class="ch" style="height:220px"><canvas id="tf-w"></canvas></div>
         </div>
         ${odIss.length?`<div class="card" style="border-color:rgba(239,68,68,.2)">
@@ -1283,21 +1387,23 @@ function renderTrackerFocusDash(teamIss){
           <div class="tw" style="max-height:220px;overflow-y:auto"><table><thead><tr><th>#</th><th>Title</th><th>Assignee</th><th>Due</th></tr></thead>
           <tbody>${odIss.map(i=>`<tr class="od-row">
             <td><a href="${S.url}/issues/${i.id}" target="_blank" style="color:var(--a);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.68rem">#${i.id}</a></td>
-            <td style="font-size:.75rem">${i.subject.slice(0,40)}${i.subject.length>40?'…':''}</td>
+            <td style="font-size:.75rem">${i.subject.slice(0,38)}${i.subject.length>38?'…':''}</td>
             <td style="font-size:.72rem">${i.assigned_to?.name?.split(' ')[0]||'—'}</td>
             <td style="color:var(--danger);font-family:'JetBrains Mono',monospace;font-size:.68rem">${i.due_date}</td>
           </tr>`).join('')}</tbody></table></div>
         </div>`:`<div class="card" style="border-color:rgba(16,185,129,.2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:.5rem">
           <div style="font-size:2rem">✅</div>
           <div style="font-size:.82rem;font-weight:600;color:var(--ok)">No Overdue!</div>
-          <div style="font-size:.72rem;color:var(--t3)">All focused tracker issues are on track</div>
+          <div style="font-size:.72rem;color:var(--t3)">All focused issues are on track</div>
         </div>`}
       </div>
     </div>`;
 }
 
-function renderTrackerFocusCharts(teamIss){
-  const fIss=teamIss.filter(i=>S.focusTrackers.includes(i.tracker?.name));
+function renderTrackerFocusCharts(teamIss, focus){
+  const pinnedIds=new Set(focus.issues||[]);
+  const selTrackers=new Set(focus.trackers||[]);
+  const fIss=S.issues.filter(i=>selTrackers.has(i.tracker?.name)||pinnedIds.has(i.id));
   const mMap={};
   fIss.forEach(i=>{if(i.assigned_to&&!isClosed(i)){const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;}});
   const tc=getCSS('--t1'),t3=getCSS('--t3');
@@ -1665,19 +1771,28 @@ function renderTeamsGrid(){
   const em=document.getElementById('t-empty');
   if(!S.teams.length){el.innerHTML='';em.style.display='block';return;}
   em.style.display='none';
-  el.innerHTML=S.teams.map(t=>`<div class="tcard">
+  el.innerHTML=S.teams.map(t=>{
+    const focus=t.focus||{trackers:[],issues:[]};
+    const hasFocus=focus.trackers.length||focus.issues.length;
+    return`<div class="tcard">
     <div class="tcard-stripe" style="background:linear-gradient(90deg,${t.color},${t.color}88)"></div>
     <div class="tcard-glow" style="background:${t.color}"></div>
     <div class="tcard-head">
       <div class="tcard-name">${t.name}</div>
       <div class="tcard-acts">
+        <button class="btn btn-ghost btn-sm" onclick="openAssignPanel('${t.id}')" title="Assign trackers & issues">⚡ Focus</button>
         <button class="btn btn-ghost btn-sm" onclick="editT('${t.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="delT('${t.id}')">✕</button>
       </div>
     </div>
     <div style="font-size:.7rem;color:var(--t2);margin-bottom:.6rem">${t.members.length} member${t.members.length!==1?'s':''}</div>
-    <div style="display:flex;flex-wrap:wrap;gap:.3rem">${t.members.map(m=>`<span class="chip">${m.name.split(' ')[0]}</span>`).join('')}</div>
-  </div>`).join('');
+    <div style="display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:${hasFocus?'.65rem':'.0rem'}">${t.members.map(m=>`<span class="chip">${m.name.split(' ')[0]}</span>`).join('')}</div>
+    ${hasFocus?`<div style="border-top:1px solid var(--b1);padding-top:.55rem;display:flex;flex-wrap:wrap;gap:.3rem;align-items:center">
+      <span style="font-size:.62rem;color:var(--t3);font-weight:600;margin-right:.1rem">⚡</span>
+      ${focus.trackers.map(tr=>`<span class="tr-chip on" style="font-size:.6rem;padding:.1rem .45rem;cursor:default">${tr}</span>`).join('')}
+      ${focus.issues.length?`<span class="chip" style="font-size:.62rem">${focus.issues.length} issue${focus.issues.length!==1?'s':''} pinned</span>`:''}
+    </div>`:''}
+  </div>`;}).join('');
 }
 function openModal(eid=null){
   S.editTeam=eid;S.selColor=CLRS[0];S.selMems=new Set();
