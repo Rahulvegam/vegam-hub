@@ -1064,25 +1064,48 @@ function closeSb(){document.getElementById('sidebar').classList.remove('open');d
 
 // ── TEAM NAV ──────────────────────────────────
 function renderTeamNav(){
-  document.getElementById('team-nav').innerHTML=S.teams.map(t=>`
-    <div class="ni" onclick="S.curTeam='${t.id}';go('dash')">
-      <span class="tdot" style="background:${t.color}"></span>${t.name}
-    </div>`).join('');
+  document.getElementById('team-nav').innerHTML=S.teams.map(t=>{
+    const isActive=S.curTeam==t.id;
+    return`<div class="ni${isActive?' active-team':''}" onclick="S.curTeam='${t.id}';go('dash')"
+      style="${isActive?`border-left:2.5px solid ${t.color};background:${t.color}18;color:var(--t1);font-weight:600`:''}"
+    >
+      <span class="tdot" style="background:${t.color};${isActive?'box-shadow:0 0 6px '+t.color:''}"></span>${t.name}
+    </div>`;
+  }).join('');
 }
 
 // ── DASHBOARD ─────────────────────────────────
 function renderDashTabs(){
   const tabs=[{id:'all',name:'All',color:CLRS[0]},...S.teams];
-  document.getElementById('dash-tabs').innerHTML=tabs.map(t=>`
-    <div class="tab${S.curTeam===t.id?' on':''}" onclick="S.curTeam='${t.id}';renderDashTabs();renderDash()">
-      <span style="width:7px;height:7px;border-radius:50%;background:${S.curTeam===t.id?'rgba(255,255,255,.8)':t.color};display:inline-block;flex-shrink:0;transition:background .15s"></span>
+  document.getElementById('dash-tabs').innerHTML=tabs.map(t=>{
+    const isActive=S.curTeam===t.id;
+    const focus=t.focus||{trackers:[],issues:[]};
+    const hasFocus=focus.trackers.length||focus.issues.length;
+    return`<div class="tab${isActive?' on':''}" onclick="S.curTeam='${t.id}';renderDashTabs();renderTeamNav();renderDash()"
+      style="${isActive&&t.color&&t.id!=='all'?`background:${t.color};border-color:${t.color};box-shadow:0 2px 12px ${t.color}55`:''}"
+    >
+      <span style="width:7px;height:7px;border-radius:50%;background:${isActive?'rgba(255,255,255,.9)':t.color};display:inline-block;flex-shrink:0;transition:background .15s"></span>
       ${t.name}
-    </div>`).join('');
+      ${hasFocus&&!isActive?'<span style="font-size:.55rem;opacity:.7">⚡</span>':''}
+      ${isActive&&hasFocus?'<span style="font-size:.6rem;opacity:.85">⚡</span>':''}
+    </div>`;
+  }).join('');
 }
+
 
 function getIss(tid){
   if(tid==='all')return S.issues;
   const t=S.teams.find(t=>t.id==tid);if(!t)return S.issues;
+  const focus=t.focus||{trackers:[],issues:[]};
+  const hasFocus=focus.trackers.length||focus.issues.length;
+  if(hasFocus){
+    // When focus is configured: return ONLY focused issues (tracker-type + pinned)
+    const pinnedIds=new Set(focus.issues||[]);
+    const selTrackers=new Set(focus.trackers||[]);
+    const fIss=S.issues.filter(i=>selTrackers.has(i.tracker?.name)||pinnedIds.has(i.id));
+    return[...new Map(fIss.map(i=>[i.id,i])).values()];
+  }
+  // No focus: return all issues assigned to team members
   const ids=new Set(t.members.map(m=>m.id));
   return S.issues.filter(i=>i.assigned_to&&ids.has(i.assigned_to.id));
 }
@@ -1112,7 +1135,25 @@ function renderDash(){
   const odList=iss.filter(i=>i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name));
   Object.values(DC).forEach(c=>{try{c.destroy();}catch(_){}});DC={};
 
+  const curTeamObj=S.teams.find(t=>t.id==S.curTeam);
+  const teamFocus=curTeamObj?.focus||{trackers:[],issues:[]};
+  const hasFocus=S.curTeam!=='all'&&(teamFocus.trackers.length||teamFocus.issues.length);
+
   document.getElementById('dash-body').innerHTML=`
+    ${S.curTeam!=='all'&&curTeamObj?`
+    <div style="display:flex;align-items:center;gap:.75rem;padding:.65rem 1rem;border-radius:12px;margin-bottom:1rem;background:${curTeamObj.color}18;border:1.5px solid ${curTeamObj.color}44;flex-wrap:wrap">
+      <span style="width:10px;height:10px;border-radius:50%;background:${curTeamObj.color};box-shadow:0 0 8px ${curTeamObj.color};flex-shrink:0"></span>
+      <span style="font-size:.82rem;font-weight:700;color:var(--t1)">${curTeamObj.name}</span>
+      ${hasFocus?`
+        <span style="font-size:.72rem;color:var(--t2)">·</span>
+        <span style="font-size:.72rem;color:var(--t2)">⚡ Focus active</span>
+        <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+          ${(teamFocus.trackers||[]).map(tr=>`<span class="tr-chip on" style="font-size:.6rem;padding:.1rem .45rem;cursor:default">${tr}</span>`).join('')}
+          ${teamFocus.issues?.length?`<span class="chip" style="font-size:.62rem">${teamFocus.issues.length} pinned</span>`:''}
+        </div>
+      `:`<span style="font-size:.72rem;color:var(--t3)">· Showing all issues assigned to team members</span>`}
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:.68rem" onclick="openAssignPanel('${curTeamObj.id}')">⚡ ${hasFocus?'Edit':'Set'} Focus</button>
+    </div>`:''}
     <div class="stats">
       <div class="stat"><div class="stat-bg" style="background:var(--a)"></div><span class="stat-ico">📦</span><div class="stat-lbl">Total ${infoBtn('All issues fetched across selected projects, including every status.')}</div><div class="stat-n sv">${total.toLocaleString()}</div><div class="stat-hint">${S.selProj.length} project${S.selProj.length!==1?'s':''}</div></div>
       <div class="stat"><div class="stat-bg" style="background:var(--a4)"></div><span class="stat-ico">🔓</span><div class="stat-lbl">Open ${infoBtn('Issues not yet Closed or Rejected — still active and needing attention.')}</div><div class="stat-n sv ora">${open.toLocaleString()}</div><div class="stat-hint">${total?Math.round(open/total*100):0}% of total</div></div>
@@ -1134,17 +1175,11 @@ function renderDash(){
       <tbody id="od-tbody"></tbody></table></div>
       <div id="od-pages"></div>
     </div>`:''}
-    <div id="tracker-focus-dash"></div>`;
+    <div id="tracker-focus-dash" style="display:none"></div>`;
 
   // render overdue table with pagination
   odPage=0; _odList=odList;
   renderOdTable();
-
-  // render tracker focus panel if team selected + team has focus configured
-  const curTeamObj=S.teams.find(t=>t.id==S.curTeam);
-  const teamFocus=curTeamObj?.focus||{trackers:[],issues:[]};
-  const hasFocus=S.curTeam!=='all'&&(teamFocus.trackers.length||teamFocus.issues.length);
-  if(hasFocus) renderTrackerFocusDash(iss,teamFocus,curTeamObj);
 
   const tc=getCSS('--t1'),t2=getCSS('--t2'),t3=getCSS('--t3');
   setTimeout(()=>{
@@ -1152,8 +1187,6 @@ function renderDash(){
     if(sc){DC.s=new Chart(sc,{type:'doughnut',data:{labels:Object.keys(sMap),datasets:[{data:Object.values(sMap),backgroundColor:CLRS.map(c=>c+'cc'),borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',align:'start',labels:{color:tc,font:{family:'Inter',size:10},boxWidth:10,padding:10}}}}});}
     const wc=document.getElementById('d-w');
     if(wc){const sorted=Object.entries(mMap).sort((a,b)=>b[1]-a[1]).slice(0,10);DC.w=new Chart(wc,{type:'bar',data:{labels:sorted.map(([n])=>n.split(' ')[0]),datasets:[{data:sorted.map(([,v])=>v),backgroundColor:CLRS.map(c=>c+'44'),borderColor:CLRS,borderWidth:1.5,borderRadius:7,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{color:t3,font:{size:10}},grid:{color:getCSS('--b1')}},y:{ticks:{color:tc,font:{size:10}},grid:{display:false}}}}});}
-    // render tracker focus charts after main charts
-    if(hasFocus) renderTrackerFocusCharts(iss,teamFocus);
   },80);
 }
 
