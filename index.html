@@ -667,7 +667,7 @@ tr:hover td{background:var(--s2);color:var(--t1);}
             <div style="margin-top:.8rem;font-size:.7rem;color:var(--t2)">Selected: <span id="ap-sel-count" style="font-weight:700;color:var(--a)">0</span> issues</div>
             <div id="ap-sel-chips" style="display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.5rem;max-height:100px;overflow-y:auto"></div>
           </div>
-          <div style="padding:1rem 1.4rem;border-top:1px solid var(--b1);position:sticky;bottom:0;background:var(--s1);display:flex;gap:.6rem;justify-content:flex-end">
+          <div style="padding:1rem 1.4rem;border-top:1px solid var(--b1);position:sticky;bottom:0;background:var(--s1);display:flex;gap:.6rem;justify-content:flex-end;z-index:10">
             <button class="btn btn-ghost btn-sm" onclick="closeAssignPanel()">Cancel</button>
             <button class="btn btn-p btn-sm" onclick="saveAssign()">Save Focus →</button>
           </div>
@@ -1065,7 +1065,7 @@ function closeSb(){document.getElementById('sidebar').classList.remove('open');d
 // ── TEAM NAV ──────────────────────────────────
 function renderTeamNav(){
   document.getElementById('team-nav').innerHTML=S.teams.map(t=>{
-    const isActive=S.curTeam==t.id;
+    const isActive=String(S.curTeam)===String(t.id);
     return`<div class="ni${isActive?' active-team':''}" onclick="S.curTeam='${t.id}';go('dash')"
       style="${isActive?`border-left:2.5px solid ${t.color};background:${t.color}18;color:var(--t1);font-weight:600`:''}"
     >
@@ -1078,7 +1078,7 @@ function renderTeamNav(){
 function renderDashTabs(){
   const tabs=[{id:'all',name:'All',color:CLRS[0]},...S.teams];
   document.getElementById('dash-tabs').innerHTML=tabs.map(t=>{
-    const isActive=S.curTeam===t.id;
+    const isActive=String(S.curTeam)===String(t.id);
     const focus=t.focus||{trackers:[],issues:[]};
     const hasFocus=focus.trackers.length||focus.issues.length;
     return`<div class="tab${isActive?' on':''}" onclick="S.curTeam='${t.id}';renderDashTabs();renderTeamNav();renderDash()"
@@ -1235,15 +1235,14 @@ function openAssignPanel(tid){
   document.getElementById('assign-panel-subtitle').textContent=`Configuring focus for: ${team.name}`;
   document.getElementById('assign-overlay').style.display='block';
   document.getElementById('assign-panel').style.display='flex';
+  // Hide fetch pill so it doesn't overlap the panel footer
+  const pill=document.getElementById('fetch-pill');
+  if(pill)pill.style.display='none';
 
-  // Render tracker chips
   renderAPTrackerChips();
-
-  // Populate tracker filter dropdown
   const trackers=[...new Set(S.issues.map(i=>i.tracker?.name).filter(Boolean))].sort();
   const tSel=document.getElementById('ap-iss-tracker');
   tSel.innerHTML='<option value="">All Trackers</option>'+trackers.map(t=>`<option value="${t}">${t}</option>`).join('');
-
   document.getElementById('ap-iss-search').value='';
   filterAssignIss();
   renderAPSelChips();
@@ -1253,6 +1252,9 @@ function closeAssignPanel(){
   document.getElementById('assign-overlay').style.display='none';
   document.getElementById('assign-panel').style.display='none';
   _assignTeamId=null;
+  // Restore fetch pill
+  const pill=document.getElementById('fetch-pill');
+  if(pill)pill.style.display='';
 }
 
 function renderAPTrackerChips(){
@@ -1322,7 +1324,7 @@ function saveAssign(){
   closeAssignPanel();
   renderTeamsGrid();
   // re-render dashboard if this team is currently active
-  if(S.curTeam==_assignTeamId) renderDash();
+  if(String(S.curTeam)===String(_assignTeamId)) renderDash();
 }
 
 function renderTrackerFocusDash(teamIss, focus, team){
