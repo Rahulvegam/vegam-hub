@@ -640,34 +640,66 @@ tr:hover td{background:var(--s2);color:var(--t1);}
 
         <!-- TEAM ASSIGNMENT PANEL (slide-in) -->
         <div id="assign-overlay" onclick="closeAssignPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1100;backdrop-filter:blur(4px)"></div>
-        <div id="assign-panel" style="display:none;position:fixed;top:0;right:0;width:480px;max-width:95vw;height:100vh;background:var(--s1);border-left:1px solid var(--b2);z-index:1101;overflow-y:auto;box-shadow:-8px 0 40px rgba(0,0,0,.3);flex-direction:column">
-          <div style="padding:1.4rem 1.4rem .8rem;border-bottom:1px solid var(--b1);position:sticky;top:0;background:var(--s1);z-index:2">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem">
-              <div style="font-size:.95rem;font-weight:800;letter-spacing:-.3px">⚡ Assign Focus</div>
+        <div id="assign-panel" style="display:none;position:fixed;top:0;right:0;width:500px;max-width:95vw;height:100vh;background:var(--s1);border-left:1px solid var(--b2);z-index:1101;box-shadow:-8px 0 40px rgba(0,0,0,.3);flex-direction:column">
+
+          <!-- Header -->
+          <div style="padding:1.2rem 1.4rem .8rem;border-bottom:1px solid var(--b1);position:sticky;top:0;background:var(--s1);z-index:2">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.25rem">
+              <div style="font-size:.95rem;font-weight:800;letter-spacing:-.3px">⚡ Focus</div>
               <button class="btn btn-ghost btn-sm" onclick="closeAssignPanel()">✕ Close</button>
             </div>
-            <div id="assign-panel-subtitle" style="font-size:.72rem;color:var(--t2)"></div>
+            <div id="assign-panel-subtitle" style="font-size:.72rem;color:var(--t2);margin-bottom:.8rem"></div>
+            <!-- Tabs -->
+            <div style="display:flex;gap:.3rem">
+              <button id="ap-tab-selected" onclick="apSwitchTab('selected')" class="btn btn-p btn-sm" style="flex:1;justify-content:center">
+                ✓ Selected <span id="ap-sel-badge" style="background:rgba(255,255,255,.25);border-radius:10px;padding:.05rem .4rem;font-size:.65rem;margin-left:.3rem">0</span>
+              </button>
+              <button id="ap-tab-browse" onclick="apSwitchTab('browse')" class="btn btn-ghost btn-sm" style="flex:1;justify-content:center">＋ Browse & Add</button>
+            </div>
           </div>
-          <div style="padding:1.2rem 1.4rem">
-            <!-- Trackers -->
-            <div style="font-size:.78rem;font-weight:700;margin-bottom:.55rem;letter-spacing:-.2px">Tracker Types</div>
-            <div style="font-size:.7rem;color:var(--t2);margin-bottom:.65rem">Select tracker types to monitor for this team</div>
+
+          <!-- TAB: SELECTED -->
+          <div id="ap-pane-selected" style="flex:1;overflow-y:auto;padding:1rem 1.4rem">
+            <div style="font-size:.72rem;color:var(--t2);margin-bottom:.8rem">Everything currently in focus. Click ✕ to remove.</div>
+
+            <!-- Selected Trackers -->
+            <div style="font-size:.75rem;font-weight:700;margin-bottom:.5rem;color:var(--t1)">Tracker Types</div>
+            <div id="ap-sel-trackers" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem;min-height:28px">
+              <span style="font-size:.72rem;color:var(--t3);font-style:italic">No trackers selected</span>
+            </div>
+            <div style="border-top:1px solid var(--b1);margin-bottom:1rem"></div>
+
+            <!-- Selected Issues -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+              <div style="font-size:.75rem;font-weight:700;color:var(--t1)">Pinned Issues <span id="ap-pinned-count" style="color:var(--a);font-size:.7rem"></span></div>
+              <button class="btn btn-ghost btn-sm" id="ap-clear-all-btn" onclick="apClearAll()" style="font-size:.65rem;display:none">Clear All</button>
+            </div>
+            <div id="ap-sel-issues-list" style="border:1px solid var(--b1);border-radius:10px;overflow:hidden">
+              <div style="padding:.9rem 1rem;font-size:.72rem;color:var(--t3);font-style:italic;text-align:center">No issues pinned yet</div>
+            </div>
+          </div>
+
+          <!-- TAB: BROWSE -->
+          <div id="ap-pane-browse" style="flex:1;overflow-y:auto;padding:1rem 1.4rem;display:none">
+            <!-- Tracker chips -->
+            <div style="font-size:.75rem;font-weight:700;margin-bottom:.4rem;color:var(--t1)">Tracker Types</div>
+            <div style="font-size:.68rem;color:var(--t2);margin-bottom:.55rem">Toggle to include all issues of that type</div>
             <div id="ap-tracker-chips" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.2rem;min-height:28px"></div>
-            <div style="border-top:1px solid var(--b1);margin-bottom:1.2rem"></div>
-            <!-- Specific Issues -->
-            <div style="font-size:.78rem;font-weight:700;margin-bottom:.55rem;letter-spacing:-.2px">Specific Issues</div>
-            <div style="font-size:.7rem;color:var(--t2);margin-bottom:.65rem">Search and pin specific issues to this team's focus dashboard</div>
+            <div style="border-top:1px solid var(--b1);margin-bottom:1rem"></div>
+
+            <!-- Issue search -->
+            <div style="font-size:.75rem;font-weight:700;margin-bottom:.4rem;color:var(--t1)">Search & Pin Issues</div>
             <div style="display:flex;gap:.5rem;margin-bottom:.65rem">
               <input id="ap-iss-search" class="inp" placeholder="Search by title or #ID…" oninput="filterAssignIss()" style="margin:0;flex:1;font-size:.8rem"/>
               <select id="ap-iss-tracker" class="inp" onchange="filterAssignIss()" style="margin:0;width:130px;font-size:.78rem;padding:.4rem .6rem">
                 <option value="">All Trackers</option>
               </select>
             </div>
-            <div id="ap-iss-list" style="max-height:280px;overflow-y:auto;border:1px solid var(--b1);border-radius:10px"></div>
-            <div style="margin-top:.8rem;font-size:.7rem;color:var(--t2)">Selected: <span id="ap-sel-count" style="font-weight:700;color:var(--a)">0</span> issues</div>
-            <div id="ap-sel-chips" style="display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.5rem;max-height:100px;overflow-y:auto"></div>
+            <div id="ap-iss-list" style="max-height:340px;overflow-y:auto;border:1px solid var(--b1);border-radius:10px"></div>
           </div>
-          <div style="padding:1rem 1.4rem;border-top:1px solid var(--b1);position:sticky;bottom:0;background:var(--s1);display:flex;gap:.6rem;justify-content:flex-end;z-index:10">
+
+          <!-- Footer -->
+          <div style="padding:.9rem 1.4rem;border-top:1px solid var(--b1);position:sticky;bottom:0;background:var(--s1);display:flex;gap:.6rem;justify-content:flex-end;z-index:10">
             <button class="btn btn-ghost btn-sm" onclick="closeAssignPanel()">Cancel</button>
             <button class="btn btn-p btn-sm" onclick="saveAssign()">Save Focus →</button>
           </div>
@@ -1232,29 +1264,121 @@ function openAssignPanel(tid){
   _apSelTrackers=new Set(focus.trackers);
   _apSelIssues=new Set(focus.issues);
 
-  document.getElementById('assign-panel-subtitle').textContent=`Configuring focus for: ${team.name}`;
+  document.getElementById('assign-panel-subtitle').textContent=team.name;
   document.getElementById('assign-overlay').style.display='block';
   document.getElementById('assign-panel').style.display='flex';
-  // Hide fetch pill so it doesn't overlap the panel footer
   const pill=document.getElementById('fetch-pill');
   if(pill)pill.style.display='none';
 
-  renderAPTrackerChips();
+  // Start on Selected tab if already has focus, else Browse
+  apSwitchTab(_apSelTrackers.size||_apSelIssues.size?'selected':'browse');
+
   const trackers=[...new Set(S.issues.map(i=>i.tracker?.name).filter(Boolean))].sort();
   const tSel=document.getElementById('ap-iss-tracker');
   tSel.innerHTML='<option value="">All Trackers</option>'+trackers.map(t=>`<option value="${t}">${t}</option>`).join('');
   document.getElementById('ap-iss-search').value='';
+  renderAPTrackerChips();
   filterAssignIss();
-  renderAPSelChips();
+  renderAPSelected();
 }
 
 function closeAssignPanel(){
   document.getElementById('assign-overlay').style.display='none';
   document.getElementById('assign-panel').style.display='none';
   _assignTeamId=null;
-  // Restore fetch pill
   const pill=document.getElementById('fetch-pill');
   if(pill)pill.style.display='';
+}
+
+let _apCurTab='selected';
+function apSwitchTab(tab){
+  _apCurTab=tab;
+  const selPane=document.getElementById('ap-pane-selected');
+  const browsePane=document.getElementById('ap-pane-browse');
+  const selBtn=document.getElementById('ap-tab-selected');
+  const browseBtn=document.getElementById('ap-tab-browse');
+  if(tab==='selected'){
+    selPane.style.display='block';browsePane.style.display='none';
+    selBtn.className='btn btn-p btn-sm';browseBtn.className='btn btn-ghost btn-sm';
+    selBtn.style.flex='1';selBtn.style.justifyContent='center';
+    browseBtn.style.flex='1';browseBtn.style.justifyContent='center';
+    renderAPSelected();
+  } else {
+    selPane.style.display='none';browsePane.style.display='block';
+    selBtn.className='btn btn-ghost btn-sm';browseBtn.className='btn btn-p btn-sm';
+    selBtn.style.flex='1';selBtn.style.justifyContent='center';
+    browseBtn.style.flex='1';browseBtn.style.justifyContent='center';
+    renderAPTrackerChips();
+    filterAssignIss();
+  }
+  // update badge count
+  const badge=document.getElementById('ap-sel-badge');
+  if(badge)badge.textContent=_apSelTrackers.size+_apSelIssues.size;
+}
+
+function renderAPSelected(){
+  // Tracker removable chips
+  const tEl=document.getElementById('ap-sel-trackers');
+  if(tEl){
+    if(!_apSelTrackers.size){
+      tEl.innerHTML='<span style="font-size:.72rem;color:var(--t3);font-style:italic">No trackers selected — go to Browse & Add</span>';
+    } else {
+      tEl.innerHTML=[..._apSelTrackers].map(tr=>`
+        <div style="display:inline-flex;align-items:center;gap:.35rem;padding:.28rem .65rem;border-radius:20px;background:var(--a);color:#fff;font-size:.75rem;font-weight:600">
+          ${tr}
+          <span onclick="apRemoveTracker('${tr}')" style="cursor:pointer;opacity:.75;font-size:.8rem;line-height:1;padding:.05rem .1rem;border-radius:3px" title="Remove">✕</span>
+        </div>`).join('');
+    }
+  }
+
+  // Pinned issues removable list
+  const iEl=document.getElementById('ap-sel-issues-list');
+  const cnt=document.getElementById('ap-pinned-count');
+  const clearBtn=document.getElementById('ap-clear-all-btn');
+  if(cnt)cnt.textContent=_apSelIssues.size?`(${_apSelIssues.size})`:'';
+  if(clearBtn)clearBtn.style.display=_apSelIssues.size?'inline-flex':'none';
+  if(iEl){
+    if(!_apSelIssues.size){
+      iEl.innerHTML='<div style="padding:.9rem 1rem;font-size:.72rem;color:var(--t3);font-style:italic;text-align:center">No issues pinned yet — go to Browse & Add</div>';
+    } else {
+      const issues=[..._apSelIssues].map(id=>S.issues.find(x=>x.id===id)).filter(Boolean);
+      iEl.innerHTML=issues.map(i=>{
+        const od=i.due_date&&new Date(i.due_date)<new Date()&&!isClosed(i);
+        return`<div style="display:flex;align-items:center;gap:.65rem;padding:.55rem .9rem;border-bottom:1px solid var(--b1);background:rgba(99,102,241,.04)">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.15rem">
+              <a href="${S.url}/issues/${i.id}" target="_blank" style="font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--a);text-decoration:none">#${i.id}</a>
+              <span class="chip" style="font-size:.58rem">${i.tracker?.name||'?'}</span>
+              ${od?'<span style="font-size:.6rem;color:var(--danger)">OD</span>':''}
+            </div>
+            <div style="font-size:.78rem;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i.subject}</div>
+            <div style="font-size:.65rem;color:var(--t3);margin-top:.1rem">${i.assigned_to?.name||'Unassigned'}${i.due_date?' · Due: '+i.due_date:''}</div>
+          </div>
+          <button onclick="apRemoveIssue(${i.id})" style="flex-shrink:0;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:var(--danger);border-radius:8px;padding:.25rem .55rem;cursor:pointer;font-size:.72rem;font-weight:600" title="Remove">✕</button>
+        </div>`;
+      }).join('');
+    }
+  }
+  // update badge
+  const badge=document.getElementById('ap-sel-badge');
+  if(badge)badge.textContent=_apSelTrackers.size+_apSelIssues.size;
+}
+
+function apRemoveTracker(name){
+  _apSelTrackers.delete(name);
+  renderAPSelected();
+  renderAPTrackerChips();
+}
+function apRemoveIssue(id){
+  _apSelIssues.delete(id);
+  renderAPSelected();
+  filterAssignIss();
+}
+function apClearAll(){
+  if(!confirm('Remove all pinned issues?'))return;
+  _apSelIssues.clear();
+  renderAPSelected();
+  filterAssignIss();
 }
 
 function renderAPTrackerChips(){
@@ -1268,6 +1392,8 @@ function togAPTracker(name){
   if(_apSelTrackers.has(name))_apSelTrackers.delete(name);
   else _apSelTrackers.add(name);
   renderAPTrackerChips();
+  const badge=document.getElementById('ap-sel-badge');
+  if(badge)badge.textContent=_apSelTrackers.size+_apSelIssues.size;
 }
 
 function filterAssignIss(){
@@ -1301,20 +1427,11 @@ function togAPIss(id){
   if(_apSelIssues.has(id))_apSelIssues.delete(id);
   else _apSelIssues.add(id);
   filterAssignIss();
-  renderAPSelChips();
+  const badge=document.getElementById('ap-sel-badge');
+  if(badge)badge.textContent=_apSelTrackers.size+_apSelIssues.size;
 }
 
-function renderAPSelChips(){
-  const cnt=document.getElementById('ap-sel-count');
-  const chips=document.getElementById('ap-sel-chips');
-  if(cnt)cnt.textContent=_apSelIssues.size;
-  if(!chips)return;
-  if(!_apSelIssues.size){chips.innerHTML='';return;}
-  chips.innerHTML=[..._apSelIssues].map(id=>{
-    const i=S.issues.find(x=>x.id===id);
-    return`<span class="chip" style="font-size:.65rem;cursor:pointer" onclick="togAPIss(${id})" title="Click to remove">#${id}${i?' — '+i.subject.slice(0,22)+'…':''} ✕</span>`;
-  }).join('');
-}
+function renderAPSelChips(){} // legacy stub — no-op
 
 function saveAssign(){
   const team=S.teams.find(t=>t.id==_assignTeamId);
