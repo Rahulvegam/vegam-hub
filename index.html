@@ -298,6 +298,10 @@ tr:hover td{background:var(--s2);color:var(--t1);}
 .tcard-name{font-size:.9rem;font-weight:800;letter-spacing:-.3px;}
 .tcard-acts{display:flex;gap:.3rem;}
 .chip{background:var(--s2);border:1px solid var(--b1);border-radius:20px;padding:.14rem .48rem;font-size:.65rem;color:var(--t2);font-weight:500;}
+.tr-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .75rem;border-radius:20px;border:1.5px solid var(--b2);font-size:.75rem;font-weight:600;cursor:pointer;transition:all .15s;background:var(--s2);color:var(--t2);user-select:none;}
+.tr-chip:hover{border-color:var(--a);color:var(--a);}
+.tr-chip.on{background:var(--a);border-color:var(--a);color:#fff;box-shadow:0 2px 10px rgba(99,102,241,.3);}
+.tr-chip.on:hover{background:var(--a2);border-color:var(--a2);}
 
 /* ════════════════════════════════════════
    COLOR SWATCHES
@@ -633,6 +637,26 @@ tr:hover td{background:var(--s2);color:var(--t1);}
           </div>
           <button class="btn btn-p btn-sm" onclick="openModal()">+ New Team</button>
         </div>
+
+        <!-- TRACKER FOCUS CONFIG -->
+        <div class="card" style="margin-bottom:1.2rem;border:1.5px dashed var(--b2);background:linear-gradient(135deg,rgba(99,102,241,.04),rgba(236,72,153,.03))">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
+            <div>
+              <div style="font-size:.85rem;font-weight:700;letter-spacing:-.2px">⚡ Tracker Focus</div>
+              <div style="font-size:.72rem;color:var(--t2);margin-top:.1rem">Select trackers to track per team on the dashboard. Applies to all teams globally.</div>
+            </div>
+            <div style="display:flex;gap:.4rem">
+              <button class="btn btn-ghost btn-sm" onclick="selAllTrackers()">All</button>
+              <button class="btn btn-ghost btn-sm" onclick="clearTrackers()">Clear</button>
+              <button class="btn btn-p btn-sm" onclick="saveTrackerFocus()">Save Focus</button>
+            </div>
+          </div>
+          <div id="tracker-chips" style="display:flex;flex-wrap:wrap;gap:.45rem;min-height:32px">
+            <span style="font-size:.75rem;color:var(--t3);align-self:center">Loading trackers…</span>
+          </div>
+          <div id="tracker-focus-saved" style="display:none;font-size:.7rem;color:var(--ok);margin-top:.6rem;font-family:'JetBrains Mono',monospace">✓ Tracker focus saved</div>
+        </div>
+
         <div class="tgrid" id="t-grid"></div>
         <div id="t-empty" class="empty" style="display:none"><div class="empty-ico">👥</div>No teams yet — create one to get started</div>
       </div>
@@ -670,6 +694,7 @@ let S={
   issues:[],users:[],versions:[],allProjects:[],
   teams:JSON.parse(localStorage.getItem('vg_teams')||'[]'),
   selProj:JSON.parse(localStorage.getItem('vg_proj')||'[]'),
+  focusTrackers:JSON.parse(localStorage.getItem('vg_focus_trackers')||'[]'),
   curTeam:'all',curUser:null,
   editTeam:null,selColor:CLRS[0],selMems:new Set(),
   calY:new Date().getFullYear(),calM:new Date().getMonth(),
@@ -999,6 +1024,7 @@ async function doRefresh(){
 // ── RENDER APP ────────────────────────────────
 function renderApp(){
   renderTeamNav();renderDashTabs();renderTeamsGrid();renderIssFilters();populateCalTm();
+  renderTrackerChips();
   liveUpdate();
 }
 
@@ -1016,7 +1042,7 @@ function go(name){
   else if(name==='cal')renderCal();
   else if(name==='issues'){renderIssFilters();renderIss();}
   else if(name==='dash')renderDash();
-  else if(name==='teams')renderTeamsGrid();
+  else if(name==='teams'){renderTeamsGrid();renderTrackerChips();}
 }
 function openSb(){document.getElementById('sidebar').classList.add('open');document.getElementById('mob-bg').classList.add('on');}
 function closeSb(){document.getElementById('sidebar').classList.remove('open');document.getElementById('mob-bg').classList.remove('on');}
@@ -1092,11 +1118,15 @@ function renderDash(){
       <div class="tw"><table><thead><tr><th>#</th><th>Title</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead>
       <tbody id="od-tbody"></tbody></table></div>
       <div id="od-pages"></div>
-    </div>`:''}`;
+    </div>`:''}
+    <div id="tracker-focus-dash"></div>`;
 
   // render overdue table with pagination
   odPage=0; _odList=odList;
   renderOdTable();
+
+  // render tracker focus panel if team selected + trackers configured
+  if(S.curTeam!=='all'&&S.focusTrackers.length) renderTrackerFocusDash(iss);
 
   const tc=getCSS('--t1'),t2=getCSS('--t2'),t3=getCSS('--t3');
   setTimeout(()=>{
@@ -1104,7 +1134,9 @@ function renderDash(){
     if(sc){DC.s=new Chart(sc,{type:'doughnut',data:{labels:Object.keys(sMap),datasets:[{data:Object.values(sMap),backgroundColor:CLRS.map(c=>c+'cc'),borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',align:'start',labels:{color:tc,font:{family:'Inter',size:10},boxWidth:10,padding:10}}}}});}
     const wc=document.getElementById('d-w');
     if(wc){const sorted=Object.entries(mMap).sort((a,b)=>b[1]-a[1]).slice(0,10);DC.w=new Chart(wc,{type:'bar',data:{labels:sorted.map(([n])=>n.split(' ')[0]),datasets:[{data:sorted.map(([,v])=>v),backgroundColor:CLRS.map(c=>c+'44'),borderColor:CLRS,borderWidth:1.5,borderRadius:7,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{color:t3,font:{size:10}},grid:{color:getCSS('--b1')}},y:{ticks:{color:tc,font:{size:10}},grid:{display:false}}}}});}
-  },50);
+    // render tracker focus charts after main charts
+    if(S.curTeam!=='all'&&S.focusTrackers.length) renderTrackerFocusCharts(iss);
+  },80);
 }
 
 let odPage=0;const odPerPage=50;
@@ -1135,7 +1167,149 @@ function renderOdTable(){
   </div>`;
 }
 
-// ── USER SEARCH ───────────────────────────────
+// ── TRACKER FOCUS ─────────────────────────────
+let _tfCharts={};
+
+function renderTrackerChips(){
+  const el=document.getElementById('tracker-chips');
+  if(!el)return;
+  const trackers=[...new Set(S.issues.map(i=>i.tracker?.name).filter(Boolean))].sort();
+  if(!trackers.length){el.innerHTML='<span style="font-size:.75rem;color:var(--t3)">No trackers found — load issues first</span>';return;}
+  el.innerHTML=trackers.map(t=>`
+    <div class="tr-chip${S.focusTrackers.includes(t)?' on':''}" onclick="togTracker('${t}')">${t}</div>
+  `).join('');
+}
+
+function togTracker(name){
+  if(S.focusTrackers.includes(name)) S.focusTrackers=S.focusTrackers.filter(t=>t!==name);
+  else S.focusTrackers.push(name);
+  renderTrackerChips();
+}
+function selAllTrackers(){
+  S.focusTrackers=[...new Set(S.issues.map(i=>i.tracker?.name).filter(Boolean))];
+  renderTrackerChips();
+}
+function clearTrackers(){S.focusTrackers=[];renderTrackerChips();}
+function saveTrackerFocus(){
+  localStorage.setItem('vg_focus_trackers',JSON.stringify(S.focusTrackers));
+  const el=document.getElementById('tracker-focus-saved');
+  if(el){el.style.display='block';setTimeout(()=>el.style.display='none',2500);}
+}
+
+function renderTrackerFocusDash(teamIss){
+  const el=document.getElementById('tracker-focus-dash');
+  if(!el||!S.focusTrackers.length)return;
+  const today=new Date();today.setHours(0,0,0,0);
+  const fIss=teamIss.filter(i=>S.focusTrackers.includes(i.tracker?.name));
+  if(!fIss.length){el.innerHTML=`<div class="card" style="border-color:var(--a);opacity:.6;text-align:center;padding:2rem"><div style="font-size:.85rem;color:var(--t2)">No issues found for focused trackers (${S.focusTrackers.join(', ')}) in this team.</div></div>`;return;}
+
+  const total=fIss.length;
+  const open=fIss.filter(i=>!isClosed(i)).length;
+  const closed=fIss.filter(i=>isClosed(i)).length;
+  const inP=fIss.filter(i=>i.status?.name==='In Progress').length;
+  const od=fIss.filter(i=>i.due_date&&new Date(i.due_date)<today&&!isClosed(i)).length;
+  const pct=total?Math.round(closed/total*100):0;
+
+  // Member workload for focused trackers
+  const mMap={};
+  fIss.forEach(i=>{if(i.assigned_to&&!isClosed(i)){const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;}});
+
+  // Per-tracker breakdown
+  const tMap={};
+  fIss.forEach(i=>{const t=i.tracker?.name||'?';if(!tMap[t])tMap[t]={total:0,open:0,closed:0,od:0};tMap[t].total++;if(isClosed(i))tMap[t].closed++;else{tMap[t].open++;if(i.due_date&&new Date(i.due_date)<today)tMap[t].od++;}});
+
+  // Overdue issues for focused trackers
+  const odIss=fIss.filter(i=>i.due_date&&new Date(i.due_date)<today&&!isClosed(i));
+
+  const team=S.teams.find(t=>t.id==S.curTeam);
+  const teamColor=team?.color||'var(--a)';
+
+  el.innerHTML=`
+    <div style="margin-top:1.5rem">
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap">
+        <div style="width:3px;height:22px;border-radius:2px;background:${teamColor};flex-shrink:0"></div>
+        <div style="font-size:.95rem;font-weight:800;letter-spacing:-.3px">⚡ Tracker Focus</div>
+        <div style="display:flex;gap:.35rem;flex-wrap:wrap">
+          ${S.focusTrackers.map(t=>`<span class="tr-chip on" style="font-size:.65rem;padding:.15rem .55rem;cursor:default">${t}</span>`).join('')}
+        </div>
+        <span style="font-size:.7rem;color:var(--t3);margin-left:auto">${team?.name||''}</span>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stats" style="margin-bottom:1rem">
+        <div class="stat"><span class="stat-ico">📦</span><div class="stat-lbl">Total</div><div class="stat-n sv">${total}</div></div>
+        <div class="stat"><span class="stat-ico">🔓</span><div class="stat-lbl">Open</div><div class="stat-n sv ora">${open}</div><div class="stat-hint">${total?Math.round(open/total*100):0}%</div></div>
+        <div class="stat"><span class="stat-ico">⚙</span><div class="stat-lbl">In Progress</div><div class="stat-n sv blu">${inP}</div></div>
+        <div class="stat"><span class="stat-ico">✓</span><div class="stat-lbl">Closed</div><div class="stat-n sv grn">${closed}</div></div>
+        <div class="stat"><span class="stat-ico">⚠</span><div class="stat-lbl">Overdue</div><div class="stat-n sv red">${od}</div></div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="card" style="margin-bottom:1rem;padding:1rem 1.2rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+          <span style="font-size:.78rem;font-weight:600">Overall Completion</span>
+          <span style="font-size:1.1rem;font-weight:900;color:${teamColor}">${pct}%</span>
+        </div>
+        <div class="pbar" style="height:8px"><div class="pbar-fill" style="background:${teamColor};width:${pct}%"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:.4rem;font-size:.68rem;color:var(--t3);font-family:'JetBrains Mono',monospace">
+          <span>${closed} closed of ${total}</span><span>${open} remaining</span>
+        </div>
+      </div>
+
+      <!-- Per-tracker cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.75rem;margin-bottom:1rem">
+        ${Object.entries(tMap).map(([name,d],i)=>`
+          <div class="card" style="border-left:2.5px solid ${CLRS[i%CLRS.length]}">
+            <div style="font-size:.65rem;font-weight:700;color:${CLRS[i%CLRS.length]};text-transform:uppercase;letter-spacing:.8px;margin-bottom:.4rem">${name}</div>
+            <div style="font-size:1.6rem;font-weight:900;letter-spacing:-1px;margin-bottom:.3rem">${d.total}</div>
+            <div style="display:flex;gap:.4rem;font-size:.68rem;margin-bottom:.5rem;flex-wrap:wrap">
+              <span style="color:var(--a4)">${d.open} open</span>
+              <span style="color:var(--ok)">${d.closed} closed</span>
+              ${d.od?`<span style="color:var(--danger)">${d.od} OD</span>`:''}
+            </div>
+            <div class="pbar"><div class="pbar-fill" style="background:${CLRS[i%CLRS.length]};width:${d.total?Math.round(d.closed/d.total*100):0}%"></div></div>
+            <div style="font-size:.62rem;color:var(--t3);margin-top:.25rem;font-family:'JetBrains Mono',monospace">${d.total?Math.round(d.closed/d.total*100):0}% done</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Member workload + Overdue side by side -->
+      <div class="g2" style="margin-bottom:1rem">
+        <div class="card">
+          <div class="ctitle">Member Workload${infoBtn('Active (non-closed) issues for focused trackers only, per member.')}</div>
+          <div class="ch" style="height:220px"><canvas id="tf-w"></canvas></div>
+        </div>
+        ${odIss.length?`<div class="card" style="border-color:rgba(239,68,68,.2)">
+          <div class="ctitle" style="color:var(--danger)">⚠ Overdue <span style="font-size:.75rem;font-weight:400;color:var(--t2)">(${odIss.length})</span></div>
+          <div class="tw" style="max-height:220px;overflow-y:auto"><table><thead><tr><th>#</th><th>Title</th><th>Assignee</th><th>Due</th></tr></thead>
+          <tbody>${odIss.map(i=>`<tr class="od-row">
+            <td><a href="${S.url}/issues/${i.id}" target="_blank" style="color:var(--a);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.68rem">#${i.id}</a></td>
+            <td style="font-size:.75rem">${i.subject.slice(0,40)}${i.subject.length>40?'…':''}</td>
+            <td style="font-size:.72rem">${i.assigned_to?.name?.split(' ')[0]||'—'}</td>
+            <td style="color:var(--danger);font-family:'JetBrains Mono',monospace;font-size:.68rem">${i.due_date}</td>
+          </tr>`).join('')}</tbody></table></div>
+        </div>`:`<div class="card" style="border-color:rgba(16,185,129,.2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:.5rem">
+          <div style="font-size:2rem">✅</div>
+          <div style="font-size:.82rem;font-weight:600;color:var(--ok)">No Overdue!</div>
+          <div style="font-size:.72rem;color:var(--t3)">All focused tracker issues are on track</div>
+        </div>`}
+      </div>
+    </div>`;
+}
+
+function renderTrackerFocusCharts(teamIss){
+  const fIss=teamIss.filter(i=>S.focusTrackers.includes(i.tracker?.name));
+  const mMap={};
+  fIss.forEach(i=>{if(i.assigned_to&&!isClosed(i)){const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;}});
+  const tc=getCSS('--t1'),t3=getCSS('--t3');
+  const wc=document.getElementById('tf-w');
+  if(wc){
+    const sorted=Object.entries(mMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    if(_tfCharts.w){try{_tfCharts.w.destroy();}catch(_){}}
+    _tfCharts.w=new Chart(wc,{type:'bar',data:{labels:sorted.map(([n])=>n.split(' ')[0]),datasets:[{data:sorted.map(([,v])=>v),backgroundColor:CLRS.map(c=>c+'55'),borderColor:CLRS,borderWidth:1.5,borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{color:t3,font:{size:10}},grid:{color:getCSS('--b1')}},y:{ticks:{color:tc,font:{size:10}},grid:{display:false}}}}});
+  }
+}
+
+
 function onUserType(){
   const q=document.getElementById('user-inp').value.trim();
   const clr=document.getElementById('user-clr');
