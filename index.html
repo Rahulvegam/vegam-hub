@@ -1310,18 +1310,26 @@ function renderDashTabs(){
 function getIss(tid){
   if(tid==='all')return S.issues;
   const t=S.teams.find(t=>t.id==tid);if(!t)return S.issues;
+  const memberIds=new Set(t.members.map(m=>Number(m.id)));
   const focus=t.focus||{trackers:[],issues:[]};
   const hasFocus=focus.trackers.length||focus.issues.length;
   if(hasFocus){
-    // When focus is configured: return ONLY focused issues (tracker-type + pinned)
-    const pinnedIds=new Set(focus.issues||[]);
+    const pinnedIds=new Set((focus.issues||[]).map(x=>Number(x)));
     const selTrackers=new Set(focus.trackers||[]);
-    const fIss=S.issues.filter(i=>selTrackers.has(i.tracker?.name)||pinnedIds.has(i.id));
-    return[...new Map(fIss.map(i=>[i.id,i])).values()];
+    const result=[];const seen=new Set();
+    S.issues.forEach(i=>{
+      if(seen.has(i.id))return;
+      const assignedToMember=i.assigned_to&&memberIds.has(Number(i.assigned_to.id));
+      // Tracker filter: only show if assigned to a team member
+      const byTracker=selTrackers.has(i.tracker?.name)&&assignedToMember;
+      // Pinned issue: always show it — workload counted only if assigned to a team member
+      const byPin=pinnedIds.has(Number(i.id));
+      if(byTracker||byPin){result.push(i);seen.add(i.id);}
+    });
+    return result;
   }
-  // No focus: return all issues assigned to team members
-  const ids=new Set(t.members.map(m=>m.id));
-  return S.issues.filter(i=>i.assigned_to&&ids.has(i.assigned_to.id));
+  // No focus: all issues assigned to team members
+  return S.issues.filter(i=>i.assigned_to&&memberIds.has(Number(i.assigned_to.id)));
 }
 
 let DC={};
@@ -1341,9 +1349,11 @@ function renderDash(){
   iss.forEach(i=>{
     const s=i.status?.name||'?';
     sMap[s]=(sMap[s]||0)+1;
-    // Workload: only count active (non-closed) issues
+    // Workload: only count active issues assigned to actual team members
     if(i.assigned_to&&!['Closed','Rejected'].includes(i.status?.name)){
-      const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;
+      const curT=S.teams.find(t=>t.id==S.curTeam);
+      const isTeamMember=!curT||curT.members.some(m=>Number(m.id)===Number(i.assigned_to.id));
+      if(isTeamMember){const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;}
     }
   });
   const odList=iss.filter(i=>i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name));
@@ -1632,14 +1642,13 @@ function renderTrackerFocusDash(teamIss, focus, team){
   const today=new Date();today.setHours(0,0,0,0);
   const teamColor=team?.color||'var(--a)';
 
-  // Combine: issues matching selected trackers OR specifically pinned issues
-  const pinnedIds=new Set(focus.issues||[]);
+  // Always scope to team members first, then apply focus filter within that set
+  const pinnedIds=new Set((focus.issues||[]).map(x=>Number(x)));
   const selTrackers=new Set(focus.trackers||[]);
-  let fIss=S.issues.filter(i=>{
-    const inTeam=teamIss.includes(i); // must be in team's member set
+  let fIss=teamIss.filter(i=>{
     const byTracker=selTrackers.size&&selTrackers.has(i.tracker?.name);
-    const byPin=pinnedIds.has(i.id);
-    return byTracker||byPin; // show pinned issues regardless of team membership
+    const byPin=pinnedIds.has(Number(i.id));
+    return byTracker||byPin;
   });
   // deduplicate
   fIss=[...new Map(fIss.map(i=>[i.id,i])).values()];
@@ -1657,8 +1666,9 @@ function renderTrackerFocusDash(teamIss, focus, team){
   const od=fIss.filter(i=>i.due_date&&new Date(i.due_date)<today&&!isClosed(i)).length;
   const pct=total?Math.round(closed/total*100):0;
 
+  const _tmIds=new Set((team?.members||[]).map(m=>Number(m.id)));
   const mMap={};
-  fIss.forEach(i=>{if(i.assigned_to&&!isClosed(i)){const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;}});
+  fIss.forEach(i=>{if(i.assigned_to&&!isClosed(i)&&(!_tmIds.size||_tmIds.has(Number(i.assigned_to.id)))){const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;}});
 
   const tMap={};
   fIss.forEach(i=>{const t=i.tracker?.name||'?';if(!tMap[t])tMap[t]={total:0,open:0,closed:0,od:0};tMap[t].total++;if(isClosed(i))tMap[t].closed++;else{tMap[t].open++;if(i.due_date&&new Date(i.due_date)<today)tMap[t].od++;}});
@@ -1735,9 +1745,9 @@ function renderTrackerFocusDash(teamIss, focus, team){
 }
 
 function renderTrackerFocusCharts(teamIss, focus){
-  const pinnedIds=new Set(focus.issues||[]);
+  const pinnedIds=new Set((focus.issues||[]).map(x=>Number(x)));
   const selTrackers=new Set(focus.trackers||[]);
-  const fIss=S.issues.filter(i=>selTrackers.has(i.tracker?.name)||pinnedIds.has(i.id));
+  const fIss=teamIss.filter(i=>selTrackers.has(i.tracker?.name)||pinnedIds.has(Number(i.id)));
   const mMap={};
   fIss.forEach(i=>{if(i.assigned_to&&!isClosed(i)){const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;}});
   const tc=getCSS('--t1'),t3=getCSS('--t3');
