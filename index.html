@@ -410,10 +410,10 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
 .overlay.on .modal{transform:none;}
 .mtitle{font-size:1rem;font-weight:800;margin-bottom:1.3rem;letter-spacing:-.4px;}
 .mfoot{display:flex;gap:.55rem;justify-content:flex-end;margin-top:1.3rem;}
-.mlist{max-height:250px;overflow-y:auto;}
+.mlist{max-height:180px;overflow-y:auto;}
 .mrow{display:flex;align-items:center;gap:.6rem;padding:.5rem 0;border-bottom:1px solid var(--b1);cursor:pointer;}
 .mrow:last-child{border-bottom:none;}
-.mrow:hover{background:none;}
+.mrow:hover{background:var(--s3);}
 .mrow input[type=checkbox]{accent-color:var(--a);width:15px;height:15px;flex-shrink:0;}
 .mrow-name{font-size:.82rem;font-weight:600;color:var(--t1);}
 .mrow-cnt{margin-left:auto;font-size:.65rem;color:var(--t3);font-family:'JetBrains Mono',monospace;}
@@ -894,7 +894,9 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
     <label class="lbl">Color</label>
     <div class="swatches" id="swatches"></div>
     <label class="lbl">Members <span id="m-sel-count" style="font-weight:400;color:var(--t3)"></span></label>
-    <input class="inp" id="m-search" placeholder="Filter members…" oninput="filterMems()" style="margin-bottom:.6rem"/>
+    <div id="m-selected" style="display:flex;flex-wrap:wrap;gap:.4rem;min-height:2.2rem;padding:.45rem .55rem;background:var(--s3);border:1px solid var(--b2);border-radius:10px;margin-bottom:.7rem;align-items:center"></div>
+    <div style="font-size:.7rem;font-weight:700;color:var(--t3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.35rem">Add Members</div>
+    <input class="inp" id="m-search" placeholder="Search to add…" oninput="filterMems()" style="margin-bottom:.5rem"/>
     <div class="mlist" id="m-list"></div>
     <div class="mfoot">
       <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
@@ -2128,25 +2130,60 @@ function openModal(eid=null){
 }
 function closeModal(){document.getElementById('t-modal').classList.remove('on');}
 function editT(id){openModal(id);}
-function delT(id){if(!confirm('Delete this team?'))return;S.teams=S.teams.filter(t=>t.id!=id);saveTeams();renderApp();}
+function delT(id){
+  const t=S.teams.find(x=>x.id==id);if(!t)return;
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML=`<div style="background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:1.6rem 2rem;max-width:360px;width:90%;box-shadow:0 24px 64px rgba(0,0,0,.6)">
+    <div style="font-weight:800;font-size:1rem;margin-bottom:.5rem">Delete Team?</div>
+    <div style="font-size:.85rem;color:var(--t2);margin-bottom:1.2rem">Are you sure you want to delete <b>${t.name}</b>? This cannot be undone.</div>
+    <div style="display:flex;gap:.6rem;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" id="_dcancel">Cancel</button>
+      <button class="btn btn-danger btn-sm" id="_dconfirm">Delete</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#_dcancel').onclick=()=>overlay.remove();
+  overlay.querySelector('#_dconfirm').onclick=()=>{
+    overlay.remove();
+    S.teams=S.teams.filter(x=>x.id!=id);
+    saveTeams();renderApp();
+  };
+}
 function renderSw(){document.getElementById('swatches').innerHTML=CLRS.map(c=>`<div class="sw${c===S.selColor?' on':''}" style="background:${c}" onclick="S.selColor='${c}';renderSw()"></div>`).join('');}
 function renderMems(f=''){
-  const users=S.users.filter(u=>!f||u.firstname.toLowerCase().includes(f.toLowerCase()));
-  document.getElementById('m-sel-count').textContent=`(${S.selMems.size} selected)`;
-  document.getElementById('m-list').innerHTML=users.map(u=>`
-    <div class="mrow" onclick="togMem(${u.id})">
-      <input type="checkbox" ${S.selMems.has(u.id)?'checked':''} readonly/>
+  // ── TOP: selected chips with × remove ──
+  const selEl=document.getElementById('m-selected');
+  const selUsers=S.users.filter(u=>S.selMems.has(u.id));
+  document.getElementById('m-sel-count').textContent=`(${selUsers.length} member${selUsers.length!==1?'s':''})`;
+  if(selUsers.length){
+    selEl.innerHTML=selUsers.map(u=>`
+      <span style="display:inline-flex;align-items:center;gap:.3rem;background:var(--a);color:#fff;font-size:.75rem;font-weight:700;padding:.25rem .55rem .25rem .45rem;border-radius:20px;line-height:1.2">
+        <span style="width:18px;height:18px;border-radius:50%;background:${CLRS[u.id%CLRS.length]};display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;flex-shrink:0">${u.firstname.slice(0,2).toUpperCase()}</span>
+        ${u.firstname}
+        <span onclick="event.stopPropagation();removeMem(${u.id})" style="cursor:pointer;opacity:.75;font-size:.9rem;line-height:1;margin-left:.1rem;padding:0 .1rem" title="Remove">×</span>
+      </span>`).join('');
+  } else {
+    selEl.innerHTML='<span style="font-size:.75rem;color:var(--t3);font-style:italic;padding:.1rem .2rem">No members selected</span>';
+  }
+  // ── BOTTOM: unselected users to add ──
+  const unsel=S.users.filter(u=>!S.selMems.has(u.id)&&(!f||u.firstname.toLowerCase().includes(f.toLowerCase())));
+  document.getElementById('m-list').innerHTML=unsel.map(u=>`
+    <div class="mrow" onclick="addMem(${u.id})" title="Add ${u.firstname}">
       <div class="av av-xs" style="background:${CLRS[u.id%CLRS.length]}">${u.firstname.slice(0,2).toUpperCase()}</div>
       <span class="mrow-name">${u.firstname}</span>
       <span class="mrow-cnt">${S.issues.filter(i=>i.assigned_to?.id===u.id).length}</span>
-    </div>`).join('')||'<div class="empty" style="padding:.8rem;font-size:.8rem">No members</div>';
+      <span style="margin-left:auto;font-size:.7rem;color:var(--a);font-weight:700;padding:.15rem .45rem;border:1px solid var(--a);border-radius:6px;flex-shrink:0">+ Add</span>
+    </div>`).join('')||`<div class="empty" style="padding:.8rem;font-size:.8rem">${f?'No match':'All users added'}</div>`;
 }
 function filterMems(){renderMems(document.getElementById('m-search').value);}
+function addMem(id){S.selMems.add(id);document.getElementById('m-search').value='';renderMems('');}
+function removeMem(id){S.selMems.delete(id);renderMems(document.getElementById('m-search').value);}
 function togMem(id){if(S.selMems.has(id))S.selMems.delete(id);else S.selMems.add(id);renderMems(document.getElementById('m-search').value);}
 function saveTeam(){
   const name=document.getElementById('t-name').value.trim();
   if(!name){alert('Enter a team name.');return;}
-  if(!S.selMems.size){alert('Select at least one member.');return;}
+
   const members=S.users.filter(u=>S.selMems.has(u.id)).map(u=>({id:u.id,name:u.firstname}));
   if(S.editTeam){const idx=S.teams.findIndex(t=>t.id==S.editTeam);if(idx!==-1)S.teams[idx]={...S.teams[idx],name,color:S.selColor,members};}
   else S.teams.push({id:Date.now(),name,color:S.selColor,members});
