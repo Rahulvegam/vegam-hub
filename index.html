@@ -659,6 +659,16 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
       <button class="btn btn-ghost btn-sm" onclick="pjClear();filterPjPanel()">Clear</button>
     </div>
   </div>
+  <!-- Pinned Projects hint -->
+  <div id="pj-pinned-hint" style="padding:.6rem 1.4rem;background:var(--a)0d;border-top:1px solid var(--a)22;display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap">
+      <div>
+        <div style="font-size:.72rem;font-weight:700;color:var(--a);margin-bottom:.15rem">⚡ Pinned Projects</div>
+        <div id="pj-pinned-names" style="font-size:.68rem;color:var(--t2);line-height:1.5"></div>
+      </div>
+      <button class="btn btn-sm" style="font-size:.68rem;background:var(--a);color:#fff;border:none;flex-shrink:0" onclick="selectOnlyPinnedProjects()">Select only these</button>
+    </div>
+  </div>
   <!-- Project list -->
   <div id="pj-panel-list" style="flex:1;overflow-y:auto;border-top:1px solid var(--b1);border-bottom:1px solid var(--b1)"></div>
   <!-- Footer action -->
@@ -1015,18 +1025,56 @@ function closeProjPanel(){
   document.getElementById('proj-panel-overlay').style.display='none';
   document.getElementById('proj-panel').style.display='none';
 }
+function getPinnedProjectIds(){
+  // Collect all project identifiers that have at least one pinned issue
+  const pinnedIssueIds=new Set(S.teams.flatMap(t=>t.focus?.issues||[]).map(Number).filter(Boolean));
+  const pinnedProjects=new Set();
+  S.issues.forEach(i=>{
+    if(pinnedIssueIds.has(Number(i.id))&&i.project?.identifier)
+      pinnedProjects.add(i.project.identifier);
+  });
+  return pinnedProjects;
+}
+
+function selectOnlyPinnedProjects(){
+  const ids=getPinnedProjectIds();
+  if(!ids.size){alert('No pinned issue project info found yet — wait for data to finish loading.');return;}
+  S.selProj=[...ids];
+  localStorage.setItem('vg_proj',JSON.stringify(S.selProj));
+  filterPjPanel();
+}
+
 function filterPjPanel(){
   const f=document.getElementById('pj-panel-search')?.value||'';
+  const pinnedProjIds=getPinnedProjectIds();
+
+  // Show pinned projects hint banner
+  const hint=document.getElementById('pj-pinned-hint');
+  if(hint&&pinnedProjIds.size){
+    hint.style.display='block';
+    const names=S.allProjects.filter(p=>pinnedProjIds.has(p.identifier)).map(p=>p.name);
+    document.getElementById('pj-pinned-names').textContent=names.join(', ')||[...pinnedProjIds].join(', ');
+  } else if(hint){
+    hint.style.display='none';
+  }
+
   const list=S.allProjects.filter(p=>!f||p.name.toLowerCase().includes(f.toLowerCase())||p.identifier.toLowerCase().includes(f.toLowerCase()));
-  document.getElementById('pj-panel-list').innerHTML=list.map(p=>`
-    <div style="display:flex;align-items:center;gap:.7rem;padding:.6rem 1.4rem;cursor:pointer;border-bottom:1px solid var(--b1);transition:background .1s;" onclick="togPj('${p.identifier}',true)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''">
-      <input type="checkbox" ${S.selProj.includes(p.identifier)?'checked':''} readonly style="accent-color:var(--a);width:15px;height:15px;flex-shrink:0;pointer-events:none"/>
+  document.getElementById('pj-panel-list').innerHTML=list.map(p=>{
+    const isPinned=pinnedProjIds.has(p.identifier);
+    const isSelected=S.selProj.includes(p.identifier);
+    const issueCount=S.issues.filter(i=>i.project?.identifier===p.identifier).length;
+    return`<div style="display:flex;align-items:center;gap:.7rem;padding:.6rem 1.4rem;cursor:pointer;border-bottom:1px solid var(--b1);transition:background .1s;${isPinned?'background:var(--a)06;':''}" onclick="togPj('${p.identifier}',true)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='${isPinned?'var(--a)06':''}'" >
+      <input type="checkbox" ${isSelected?'checked':''} readonly style="accent-color:var(--a);width:15px;height:15px;flex-shrink:0;pointer-events:none"/>
       <div style="flex:1;min-width:0">
-        <div style="font-size:.83rem;font-weight:${S.selProj.includes(p.identifier)?'700':'500'};color:${S.selProj.includes(p.identifier)?'var(--a)':'var(--t1)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+        <div style="display:flex;align-items:center;gap:.4rem">
+          <div style="font-size:.83rem;font-weight:${isSelected?'700':'500'};color:${isSelected?'var(--a)':'var(--t1)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+          ${isPinned?`<span style="font-size:.55rem;font-weight:800;padding:.05rem .3rem;border-radius:4px;background:var(--a);color:#fff;flex-shrink:0;letter-spacing:.02em">PINNED</span>`:''}
+        </div>
         <div style="font-size:.65rem;color:var(--t3);font-family:'JetBrains Mono',monospace">${p.identifier}</div>
       </div>
-      <span style="font-size:.66rem;font-family:'JetBrains Mono',monospace;color:var(--t3);flex-shrink:0">${S.issues.filter(i=>i.project?.identifier===p.identifier).length||''}</span>
-    </div>`).join('')||'<div style="padding:1.5rem;text-align:center;color:var(--t3);font-size:.82rem">No projects found</div>';
+      <span style="font-size:.66rem;font-family:'JetBrains Mono',monospace;color:var(--t3);flex-shrink:0">${issueCount||''}</span>
+    </div>`;
+  }).join('')||'<div style="padding:1.5rem;text-align:center;color:var(--t3);font-size:.82rem">No projects found</div>';
   document.getElementById('pj-panel-count').textContent=`${S.selProj.length} / ${S.allProjects.length} selected`;
 }
 async function applyProjPanel(){
@@ -1103,9 +1151,22 @@ async function loadAll(){
     if(added)rebuildUsers();
   };
 
-  updLoad(5,'Fetching projects…');
+  // ── PHASE 0: Fetch ALL pinned issues first (across all teams) ──────────
+  // This makes the dashboard usable immediately with pinned data
+  const allPinnedIds=[...new Set(S.teams.flatMap(t=>t.focus?.issues||[]).map(Number).filter(Boolean))];
+  if(allPinnedIds.length){
+    updLoad(3,`Fetching ${allPinnedIds.length} pinned issues…`);
+    const pinned=await Promise.all(
+      allPinnedIds.map(id=>api('/issues/'+id+'.json',{}).then(d=>d.issue).catch(()=>null))
+    );
+    merge(pinned.filter(Boolean));
+    updLoad(8,`Pinned issues ready — loading full project data…`);
+    renderApp(); // ← dashboard is usable NOW with pinned data
+  } else {
+    updLoad(5,'Loading issues…');
+  }
 
-  // Round 1 — page 1 of ALL projects simultaneously
+  // ── PHASE 1: Page 1 of all selected projects ───────────────────────────
   const round1=await Promise.all(
     projs.map(pid=>
       api('/issues.json',{limit:100,offset:0,status_id:'*',...(pid?{project_id:pid}:{})})
@@ -1132,7 +1193,7 @@ async function loadAll(){
     return;
   }
 
-  // Round 2 — remaining pages batched 10 at a time
+  // ── PHASE 2: Remaining pages, batched 10 at a time ────────────────────
   const BATCH=10;
   for(let i=0;i<allOffsets.length;i+=BATCH){
     const chunk=allOffsets.slice(i,i+BATCH);
@@ -1149,7 +1210,7 @@ async function loadAll(){
     liveUpdate();
   }
 
-  // Round 3 — versions
+  // ── PHASE 3: Versions (background) ────────────────────────────────────
   try{
     const vr=await Promise.all(S.selProj.map(pid=>api('/projects/'+pid+'/versions.json').then(d=>d.versions||[]).catch(()=>[])));
     S.versions=vr.flat();
