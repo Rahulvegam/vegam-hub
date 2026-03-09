@@ -812,73 +812,6 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
           <button class="btn btn-p btn-sm" onclick="openModal()">+ New Team</button>
         </div>
 
-        <!-- TEAM ASSIGNMENT PANEL (slide-in) -->
-        <div id="assign-overlay" onclick="closeAssignPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1100;backdrop-filter:blur(4px)"></div>
-        <div id="assign-panel" style="display:none;position:fixed;top:0;right:0;width:500px;max-width:95vw;height:100vh;background:var(--s1);border-left:1px solid var(--b2);z-index:1101;box-shadow:-8px 0 40px rgba(0,0,0,.3);flex-direction:column">
-
-          <!-- Header -->
-          <div style="padding:1.2rem 1.4rem .8rem;border-bottom:1px solid var(--b1);position:sticky;top:0;background:var(--s1);z-index:2">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.25rem">
-              <div style="font-size:.95rem;font-weight:800;letter-spacing:-.3px">⚡ Focus</div>
-              <button class="btn btn-ghost btn-sm" onclick="closeAssignPanel()">✕ Close</button>
-            </div>
-            <div id="assign-panel-subtitle" style="font-size:.72rem;color:var(--t2);margin-bottom:.8rem"></div>
-            <!-- Tabs -->
-            <div style="display:flex;gap:.3rem">
-              <button id="ap-tab-selected" onclick="apSwitchTab('selected')" class="btn btn-p btn-sm" style="flex:1;justify-content:center">
-                ✓ Selected <span id="ap-sel-badge" style="background:rgba(255,255,255,.25);border-radius:10px;padding:.05rem .4rem;font-size:.65rem;margin-left:.3rem">0</span>
-              </button>
-              <button id="ap-tab-browse" onclick="apSwitchTab('browse')" class="btn btn-ghost btn-sm" style="flex:1;justify-content:center">＋ Browse & Add</button>
-            </div>
-          </div>
-
-          <!-- TAB: SELECTED -->
-          <div id="ap-pane-selected" style="flex:1;overflow-y:auto;padding:1rem 1.4rem">
-            <div style="font-size:.72rem;color:var(--t2);margin-bottom:.8rem">Everything currently in focus. Click ✕ to remove.</div>
-
-            <!-- Selected Trackers -->
-            <div style="font-size:.75rem;font-weight:700;margin-bottom:.5rem;color:var(--t1)">Tracker Types</div>
-            <div id="ap-sel-trackers" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem;min-height:28px">
-              <span style="font-size:.72rem;color:var(--t3);font-style:italic">No trackers selected</span>
-            </div>
-            <div style="border-top:1px solid var(--b1);margin-bottom:1rem"></div>
-
-            <!-- Selected Issues -->
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
-              <div style="font-size:.75rem;font-weight:700;color:var(--t1)">Pinned Issues <span id="ap-pinned-count" style="color:var(--a);font-size:.7rem"></span></div>
-              <button class="btn btn-ghost btn-sm" id="ap-clear-all-btn" onclick="apClearAll()" style="font-size:.65rem;display:none">Clear All</button>
-            </div>
-            <div id="ap-sel-issues-list" style="border:1px solid var(--b1);border-radius:10px;overflow:hidden">
-              <div style="padding:.9rem 1rem;font-size:.72rem;color:var(--t3);font-style:italic;text-align:center">No issues pinned yet</div>
-            </div>
-          </div>
-
-          <!-- TAB: BROWSE -->
-          <div id="ap-pane-browse" style="flex:1;overflow-y:auto;padding:1rem 1.4rem;display:none">
-            <!-- Tracker chips -->
-            <div style="font-size:.75rem;font-weight:700;margin-bottom:.4rem;color:var(--t1)">Tracker Types</div>
-            <div style="font-size:.68rem;color:var(--t2);margin-bottom:.55rem">Toggle to include all issues of that type</div>
-            <div id="ap-tracker-chips" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.2rem;min-height:28px"></div>
-            <div style="border-top:1px solid var(--b1);margin-bottom:1rem"></div>
-
-            <!-- Issue search -->
-            <div style="font-size:.75rem;font-weight:700;margin-bottom:.4rem;color:var(--t1)">Search & Pin Issues</div>
-            <div style="display:flex;gap:.5rem;margin-bottom:.65rem">
-              <input id="ap-iss-search" class="inp" placeholder="Search by title or #ID…" oninput="filterAssignIss()" style="margin:0;flex:1;font-size:.8rem"/>
-              <select id="ap-iss-tracker" class="inp" onchange="filterAssignIss()" style="margin:0;width:130px;font-size:.78rem;padding:.4rem .6rem">
-                <option value="">All Trackers</option>
-              </select>
-            </div>
-            <div id="ap-iss-list" style="max-height:340px;overflow-y:auto;border:1px solid var(--b1);border-radius:10px"></div>
-          </div>
-
-          <!-- Footer -->
-          <div style="padding:.9rem 1.4rem;border-top:1px solid var(--b1);position:sticky;bottom:0;background:var(--s1);display:flex;gap:.6rem;justify-content:flex-end;z-index:10">
-            <button class="btn btn-ghost btn-sm" onclick="closeAssignPanel()">Cancel</button>
-            <button class="btn btn-p btn-sm" onclick="saveAssign()">Save Focus →</button>
-          </div>
-        </div>
-
         <div class="tgrid" id="t-grid"></div>
         <div id="t-empty" class="empty" style="display:none"><div class="empty-ico">👥</div>No teams yet — create one to get started</div>
       </div>
@@ -1416,8 +1349,9 @@ function renderDash(){
     ${pinnedIssuesList.length?`<div class="card" style="border-color:rgba(99,102,241,.25);margin-bottom:1.2rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem">
         <div class="ctitle" style="color:var(--a);margin-bottom:0">⚡ Pinned Issues
-          <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${pinnedIssuesList.length} pinned${odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length?' · <span style="color:var(--danger);font-weight:600">'+odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length+' overdue</span>':''} · <span style="color:var(--t3)">child tasks load automatically</span>)</span>
+          <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${pinnedIssuesList.length} pinned${odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length?' · <span style="color:var(--danger);font-weight:600">'+odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length+' overdue</span>':''})</span>
         </div>
+        <button id="pinned-refresh-btn" onclick="refreshPinnedIssues()" title="Resync pinned issues" style="background:none;border:none;cursor:pointer;padding:.25rem .4rem;border-radius:6px;color:var(--t3);font-size:.9rem;transition:all .15s" onmouseover="this.style.color='var(--a)';this.style.background='var(--s3)'" onmouseout="this.style.color='var(--t3)';this.style.background='none'">⟳</button>
       </div>
       <div class="tw"><table><thead><tr><th>#</th><th>Title &amp; Tracker</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead>
       <tbody id="pinned-tbody"></tbody></table></div>
@@ -1473,6 +1407,38 @@ function renderOdTable(){
       ${odPage<tp-1?`<button class="btn btn-ghost btn-sm" onclick="odPage++;renderOdTable()">Next →</button>`:''}
     </div>
   </div>`;
+}
+
+async function refreshPinnedIssues(){
+  const btn=document.getElementById('pinned-refresh-btn');
+  if(!btn)return;
+  const team=S.teams.find(t=>String(t.id)===String(S.curTeam));
+  if(!team)return;
+  const pinIds=(team.focus?.issues||[]).map(x=>Number(x)).filter(Boolean);
+  if(!pinIds.length)return;
+
+  // Spin the button
+  btn.style.color='var(--a)';
+  btn.innerHTML='<span style="display:inline-block;animation:spin 1s linear infinite">⟳</span>';
+
+  try{
+    // Fetch each pinned issue individually — only these IDs, nothing else
+    const fetched=await Promise.all(pinIds.map(id=>
+      api('/issues/'+id+'.json',{}).then(d=>d.issue).catch(()=>null)
+    ));
+    fetched.forEach(fresh=>{
+      if(!fresh)return;
+      const idx=S.issues.findIndex(i=>Number(i.id)===Number(fresh.id));
+      if(idx!==-1) S.issues[idx]=fresh; // update in place
+      else S.issues.push(fresh);        // add if not loaded yet
+    });
+    renderDash(); // re-render dashboard with updated data
+  }catch(e){
+    console.error('Pinned refresh failed',e);
+  }finally{
+    btn.innerHTML='⟳';
+    btn.style.color='var(--t3)';
+  }
 }
 
 function renderPinnedTable(list){
@@ -2397,5 +2363,72 @@ function sbadge(s){const m={'New':'bn','In Progress':'bp','Resolved':'br','Close
 function pcls(p){if(['High','Urgent','Immediate'].includes(p))return'ph';if(p==='Low')return'pl';return'';}
 function getCSS(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
 </script>
+<!-- TEAM ASSIGNMENT PANEL — moved to body level so it works from any section -->
+<div id="assign-overlay" onclick="closeAssignPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99998;backdrop-filter:blur(4px)"></div>
+<div id="assign-panel" style="display:none;position:fixed;top:0;right:0;width:500px;max-width:95vw;height:100vh;background:var(--s1);border-left:1px solid var(--b2);z-index:99999;box-shadow:-8px 0 40px rgba(0,0,0,.3);flex-direction:column">
+
+          <!-- Header -->
+          <div style="padding:1.2rem 1.4rem .8rem;border-bottom:1px solid var(--b1);position:sticky;top:0;background:var(--s1);z-index:2">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.25rem">
+              <div style="font-size:.95rem;font-weight:800;letter-spacing:-.3px">⚡ Focus</div>
+              <button class="btn btn-ghost btn-sm" onclick="closeAssignPanel()">✕ Close</button>
+            </div>
+            <div id="assign-panel-subtitle" style="font-size:.72rem;color:var(--t2);margin-bottom:.8rem"></div>
+            <!-- Tabs -->
+            <div style="display:flex;gap:.3rem">
+              <button id="ap-tab-selected" onclick="apSwitchTab('selected')" class="btn btn-p btn-sm" style="flex:1;justify-content:center">
+                ✓ Selected <span id="ap-sel-badge" style="background:rgba(255,255,255,.25);border-radius:10px;padding:.05rem .4rem;font-size:.65rem;margin-left:.3rem">0</span>
+              </button>
+              <button id="ap-tab-browse" onclick="apSwitchTab('browse')" class="btn btn-ghost btn-sm" style="flex:1;justify-content:center">＋ Browse & Add</button>
+            </div>
+          </div>
+
+          <!-- TAB: SELECTED -->
+          <div id="ap-pane-selected" style="flex:1;overflow-y:auto;padding:1rem 1.4rem">
+            <div style="font-size:.72rem;color:var(--t2);margin-bottom:.8rem">Everything currently in focus. Click ✕ to remove.</div>
+
+            <!-- Selected Trackers -->
+            <div style="font-size:.75rem;font-weight:700;margin-bottom:.5rem;color:var(--t1)">Tracker Types</div>
+            <div id="ap-sel-trackers" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem;min-height:28px">
+              <span style="font-size:.72rem;color:var(--t3);font-style:italic">No trackers selected</span>
+            </div>
+            <div style="border-top:1px solid var(--b1);margin-bottom:1rem"></div>
+
+            <!-- Selected Issues -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+              <div style="font-size:.75rem;font-weight:700;color:var(--t1)">Pinned Issues <span id="ap-pinned-count" style="color:var(--a);font-size:.7rem"></span></div>
+              <button class="btn btn-ghost btn-sm" id="ap-clear-all-btn" onclick="apClearAll()" style="font-size:.65rem;display:none">Clear All</button>
+            </div>
+            <div id="ap-sel-issues-list" style="border:1px solid var(--b1);border-radius:10px;overflow:hidden">
+              <div style="padding:.9rem 1rem;font-size:.72rem;color:var(--t3);font-style:italic;text-align:center">No issues pinned yet</div>
+            </div>
+          </div>
+
+          <!-- TAB: BROWSE -->
+          <div id="ap-pane-browse" style="flex:1;overflow-y:auto;padding:1rem 1.4rem;display:none">
+            <!-- Tracker chips -->
+            <div style="font-size:.75rem;font-weight:700;margin-bottom:.4rem;color:var(--t1)">Tracker Types</div>
+            <div style="font-size:.68rem;color:var(--t2);margin-bottom:.55rem">Toggle to include all issues of that type</div>
+            <div id="ap-tracker-chips" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.2rem;min-height:28px"></div>
+            <div style="border-top:1px solid var(--b1);margin-bottom:1rem"></div>
+
+            <!-- Issue search -->
+            <div style="font-size:.75rem;font-weight:700;margin-bottom:.4rem;color:var(--t1)">Search & Pin Issues</div>
+            <div style="display:flex;gap:.5rem;margin-bottom:.65rem">
+              <input id="ap-iss-search" class="inp" placeholder="Search by title or #ID…" oninput="filterAssignIss()" style="margin:0;flex:1;font-size:.8rem"/>
+              <select id="ap-iss-tracker" class="inp" onchange="filterAssignIss()" style="margin:0;width:130px;font-size:.78rem;padding:.4rem .6rem">
+                <option value="">All Trackers</option>
+              </select>
+            </div>
+            <div id="ap-iss-list" style="max-height:340px;overflow-y:auto;border:1px solid var(--b1);border-radius:10px"></div>
+          </div>
+
+          <!-- Footer -->
+          <div style="padding:.9rem 1.4rem;border-top:1px solid var(--b1);position:sticky;bottom:0;background:var(--s1);display:flex;gap:.6rem;justify-content:flex-end;z-index:10">
+            <button class="btn btn-ghost btn-sm" onclick="closeAssignPanel()">Cancel</button>
+            <button class="btn btn-p btn-sm" onclick="saveAssign()">Save Focus →</button>
+          </div>
+        </div>
+
 </body>
 </html>
