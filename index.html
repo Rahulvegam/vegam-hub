@@ -1148,90 +1148,115 @@ function setChip(pid,done,count){
 }
 
 // ── LOAD ALL DATA ─────────────────────────────
+// STRATEGY: One global query (no project_id) covers all projects at once.
+// This reduces 48+ parallel streams down to a single sequential stream.
+// Max 2 concurrent requests, 500ms pause between — keeps Redmine responsive.
 async function loadAll(){
-  const projs=S.selProj.length?S.selProj:[''];
-  const seen=new Set();S.issues=[];
+  const seen=new Set(); S.issues=[];
+
   const rebuildUsers=()=>{
     const m=new Map();
     S.issues.forEach(i=>{
-      // Include assignees
       if(i.assigned_to&&!m.has(i.assigned_to.id))
         m.set(i.assigned_to.id,{id:i.assigned_to.id,firstname:i.assigned_to.name});
-      // Also include authors/reporters
       if(i.author&&!m.has(i.author.id))
         m.set(i.author.id,{id:i.author.id,firstname:i.author.name});
     });
     S.users=Array.from(m.values()).sort((a,b)=>a.firstname.localeCompare(b.firstname));
-    // If team modal is open, refresh the member list live
     if(document.getElementById('t-modal')?.classList.contains('on')){
       renderMems(document.getElementById('m-search')?.value||'');
     }
   };
+
   const merge=arr=>{
     let added=0;
     arr.forEach(i=>{if(!seen.has(i.id)){seen.add(i.id);S.issues.push(i);added++;}});
-    if(added)rebuildUsers();
+    if(added) rebuildUsers();
   };
 
-  updLoad(5,'Fetching projects…');
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
-  // Round 1 — page 1 of ALL projects simultaneously → get first 100 issues per project + total_count
-  const round1=await Promise.all(
-    projs.map(pid=>
-      api('/issues.json',{limit:100,offset:0,status_id:'*',...(pid?{project_id:pid}:{})})
-        .catch(()=>({issues:[],total_count:0}))
-    )
-  );
+  // ── Build project filter params ──────────────
+  // If specific projects selected, use project_id filter per-project (sequential).
+  // If "all" selected or empty, use a SINGLE global query — far less load on Redmine.
+  const projs = S.selProj.length ? S.selProj : [];
+  const useGlobal = projs.length === 0;
 
-  // Collect all remaining page offsets across every project
-  const allOffsets=[];
-  round1.forEach((res,idx)=>{
-    const pid=projs[idx];
-    merge(res.issues||[]);
-    const total=res.total_count||0;
-    for(let o=100;o<total;o+=100) allOffsets.push({pid,o});
-  });
+  updLoad(5, 'Connecting to Redmine…');
 
-  updLoad(20,`${S.issues.length.toLocaleString()} issues — loading more…`);
-  updateSbMeta();
-  renderApp(); // ← dashboard visible NOW with first-page data
+  // ── GLOBAL MODE: single stream, no project_id ─
+  if(useGlobal){
+    // Page 1 — get total count
+    const p1 = await api('/issues.json', {limit:100, offset:0, status_id:'*'}).catch(()=>({issues:[],total_count:0}));
+    merge(p1.issues||[]);
+    const total = p1.total_count||0;
+    updLoad(10, `${S.issues.length.toLocaleString()} / ${total.toLocaleString()} issues…`);
+    updateSbMeta(); renderApp();
 
-  if(!allOffsets.length){
-    updLoad(100,`✓ ${S.issues.length.toLocaleString()} issues loaded`);
-    setTimeout(()=>setFetch(false),1500);
-    S.lastRefresh=new Date();updateSync();updateSbMeta();renderApp();
-    return;
+    // Remaining pages — 2 at a time, 500ms pause
+    const offsets=[];
+    for(let o=100;o<total;o+=100) offsets.push(o);
+    for(let i=0;i<offsets.length;i+=2){
+      if(i>0) await sleep(500);
+      const chunk=offsets.slice(i,i+2);
+      const res=await Promise.all(chunk.map(o=>
+        api('/issues.json',{limit:100,offset:o,status_id:'*'}).then(d=>d.issues||[]).catch(()=>[])
+      ));
+      res.forEach(r=>merge(r));
+      const pct=10+Math.round(((i+chunk.length)/offsets.length)*82);
+      updLoad(pct,`${S.issues.length.toLocaleString()} / ${total.toLocaleString()} issues…`);
+      updateSbMeta(); liveUpdate();
+    }
+
+  } else {
+    // ── PROJECT MODE: one project at a time, sequential ─
+    // Fetch projects one-by-one — no parallelism — so Redmine handles each calmly.
+    let projsDone=0;
+    for(const pid of projs){
+      // Page 1 of this project
+      const p1=await api('/issues.json',{limit:100,offset:0,status_id:'*',project_id:pid}).catch(()=>({issues:[],total_count:0}));
+      merge(p1.issues||[]);
+      const total=p1.total_count||0;
+      setChip(pid, false, p1.issues?.length||0);
+
+      // Remaining pages for this project — 2 at a time, 400ms pause
+      const offsets=[];
+      for(let o=100;o<total;o+=100) offsets.push(o);
+      for(let i=0;i<offsets.length;i+=2){
+        await sleep(400);
+        const chunk=offsets.slice(i,i+2);
+        const res=await Promise.all(chunk.map(o=>
+          api('/issues.json',{limit:100,offset:o,status_id:'*',project_id:pid}).then(d=>d.issues||[]).catch(()=>[])
+        ));
+        res.forEach(r=>merge(r));
+      }
+
+      setChip(pid, true, S.issues.filter(x=>x.project?.identifier===pid).length);
+      projsDone++;
+      const pct=5+Math.round((projsDone/projs.length)*87);
+      updLoad(pct,`${S.issues.length.toLocaleString()} issues — ${projsDone}/${projs.length} projects…`);
+      updateSbMeta(); liveUpdate();
+
+      // Pause 500ms between projects — let Redmine breathe
+      if(projsDone < projs.length) await sleep(500);
+    }
   }
 
-  // Round 2 — fire ALL remaining pages across ALL projects, batched 30 at a time
-  const BATCH=30;
-  for(let i=0;i<allOffsets.length;i+=BATCH){
-    const chunk=allOffsets.slice(i,i+BATCH);
-    const results=await Promise.all(
-      chunk.map(({pid,o})=>
-        api('/issues.json',{limit:100,offset:o,status_id:'*',...(pid?{project_id:pid}:{})})
-          .then(d=>d.issues||[]).catch(()=>[])
-      )
-    );
-    results.forEach(r=>merge(r));
-    const pct=20+Math.round(((i+chunk.length)/allOffsets.length)*72);
-    updLoad(pct,`${S.issues.length.toLocaleString()} issues loaded…`);
-    updateSbMeta();
-    liveUpdate();
-  }
-
-  // Round 3 — versions (background)
+  // ── Versions: sequential, one at a time ──────
   try{
-    const vr=await Promise.all(S.selProj.map(pid=>api('/projects/'+pid+'/versions.json').then(d=>d.versions||[]).catch(()=>[])));
-    S.versions=vr.flat();
+    S.versions=[];
+    const vprojs=S.selProj.length?S.selProj:[];
+    for(const pid of vprojs){
+      const d=await api('/projects/'+pid+'/versions.json').catch(()=>({versions:[]}));
+      S.versions.push(...(d.versions||[]));
+      await sleep(200);
+    }
   }catch(e){S.versions=[];}
 
   updLoad(100,`✓ ${S.issues.length.toLocaleString()} issues loaded`);
   setTimeout(()=>setFetch(false),1500);
-  S.lastRefresh=new Date();updateSync();updateSbMeta();
-  renderApp();
+  S.lastRefresh=new Date(); updateSync(); updateSbMeta(); renderApp();
 }
-
 function liveUpdate(){
   // update counts on whichever section is visible
   const a=document.querySelector('.sec.on');if(!a)return;
