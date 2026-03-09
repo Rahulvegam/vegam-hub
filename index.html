@@ -1422,10 +1422,10 @@ function renderDash(){
     ${pinnedIssuesList.length?`<div class="card" style="border-color:rgba(99,102,241,.25);margin-bottom:1.2rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem">
         <div class="ctitle" style="color:var(--a);margin-bottom:0">⚡ Pinned Issues
-          <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${pinnedIssuesList.length} total${odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length?' · <span style="color:var(--danger);font-weight:600">'+odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length+' overdue</span>':''})</span>
+          <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${pinnedIssuesList.length} pinned${odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length?' · <span style="color:var(--danger);font-weight:600">'+odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length+' overdue</span>':''} · <span style="color:var(--t3)">child tasks load automatically</span>)</span>
         </div>
       </div>
-      <div class="tw"><table><thead><tr><th>#</th><th>Title</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead>
+      <div class="tw"><table><thead><tr><th>#</th><th>Title &amp; Tracker</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead>
       <tbody id="pinned-tbody"></tbody></table></div>
     </div>`:''}
     ${!pinnedIssuesList.length&&odList.length?`<div class="card" style="border-color:rgba(255,77,109,.2);margin-bottom:1.2rem">
@@ -1481,28 +1481,111 @@ function renderOdTable(){
   </div>`;
 }
 
+// Cache for fetched children: parentId -> [issues]
+const _childCache={};
+
+function issueRow(i, isChild=false, hasKids=false, expanded=true){
+  const today=new Date();today.setHours(0,0,0,0);
+  const isOverdue=i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name);
+  const dueTd=i.due_date
+    ? isOverdue
+      ? `<span style="color:var(--danger);font-family:'JetBrains Mono',monospace;font-size:.72rem">${i.due_date}</span><span title="Overdue" style="margin-left:.3rem;background:var(--danger);color:#fff;font-size:.58rem;font-weight:700;padding:.1rem .35rem;border-radius:4px;vertical-align:middle">OVERDUE</span>`
+      : `<span style="color:var(--t2);font-family:'JetBrains Mono',monospace;font-size:.72rem">${i.due_date}</span>`
+    : '<span style="color:var(--t3)">—</span>';
+  const trackerBadge=i.tracker?.name
+    ? `<span style="font-size:.6rem;font-weight:700;padding:.1rem .4rem;border-radius:4px;background:var(--s3);color:var(--t2);border:1px solid var(--b2);margin-right:.4rem;white-space:nowrap">${i.tracker.name}</span>`
+    : '';
+  const rowStyle=isChild
+    ? `background:var(--s2);`
+    : isOverdue ? `background:rgba(239,68,68,.04);` : '';
+  // Expand/collapse toggle for parent rows with children
+  const expandBtn=hasKids
+    ? `<span onclick="togglePinnedChildren(${i.id})" title="${expanded?'Collapse':'Expand'} subtasks"
+        style="cursor:pointer;margin-right:.45rem;font-size:.75rem;color:var(--a);user-select:none;display:inline-block;transition:transform .15s;transform:rotate(${expanded?'90':'0'}deg)">▶</span>`
+    : '';
+  const kidCountBadge=hasKids
+    ? `<span style="font-size:.6rem;font-weight:700;padding:.1rem .38rem;border-radius:10px;background:var(--a)22;color:var(--a);border:1px solid var(--a)44;margin-left:.35rem;white-space:nowrap">subtasks</span>`
+    : '';
+  const indent=isChild
+    ? `<span style="display:inline-block;width:1.2rem;flex-shrink:0"></span><span style="color:var(--b2);margin-right:.35rem;font-size:.8rem">└</span>`
+    : '';
+  return`<tr class="od-row" style="${rowStyle}${isChild?'border-left:3px solid var(--a)22;':''}">
+    <td style="${isChild?'padding-left:1rem':''}">
+      ${indent}${expandBtn}<a href="${S.url}/issues/${i.id}" target="_blank"
+        style="color:${isChild?'var(--t2)':'var(--a)'};text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.72rem">#${i.id}</a>
+    </td>
+    <td style="color:${isChild?'var(--t2)':'var(--t1)'};">${trackerBadge}${i.subject.slice(0,58)}${i.subject.length>58?'…':''}${kidCountBadge}</td>
+    <td style="${isChild?'color:var(--t2)':''}">${i.assigned_to?.name||'<span style="color:var(--t3)">Unassigned</span>'}</td>
+    <td>${dueTd}</td>
+    <td>${sbadge(i.status?.name)}</td>
+  </tr>`;
+}
+
+async function fetchChildren(parentId){
+  if(_childCache[parentId]!==undefined)return _childCache[parentId];
+  _childCache[parentId]=null; // mark as fetching
+  try{
+    const res=await api('/issues.json',{parent_id:parentId,status_id:'*',limit:50});
+    _childCache[parentId]=res.issues||[];
+  }catch(_){_childCache[parentId]=[];}
+  return _childCache[parentId];
+}
+
+// Called by the ▶ toggle button on parent rows in the pinned table
+function togglePinnedChildren(parentId){
+  // Find the row object and flip expanded state, then re-render
+  const list=window._pinnedList;
+  if(!list)return;
+  const row=list.find(r=>Number(r.issue.id)===Number(parentId));
+  if(!row)return;
+  row.expanded=!row.expanded;
+  _renderPinnedFromList(list);
+}
+
+let _renderPinnedFromList=()=>{};
+
 function renderPinnedTable(list){
   const el=document.getElementById('pinned-tbody');
   if(!el)return;
-  const today=new Date();today.setHours(0,0,0,0);
-  el.innerHTML=list.map(i=>{
-    const isOverdue=i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name);
-    const dueTd=i.due_date
-      ? isOverdue
-        ? `<span style="color:var(--danger);font-family:'JetBrains Mono',monospace;font-size:.72rem">${i.due_date}</span>
-           <span title="Overdue" style="margin-left:.3rem;background:var(--danger);color:#fff;font-size:.58rem;font-weight:700;padding:.1rem .35rem;border-radius:4px;vertical-align:middle">OVERDUE</span>`
-        : `<span style="color:var(--t2);font-family:'JetBrains Mono',monospace;font-size:.72rem">${i.due_date}</span>`
-      : '<span style="color:var(--t3)">—</span>';
-    return`<tr class="od-row" style="${isOverdue?'background:rgba(239,68,68,.04);':''}">
-      <td><a href="${S.url}/issues/${i.id}" target="_blank" style="color:var(--a);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.72rem">#${i.id}</a></td>
-      <td style="color:var(--t1)">${i.subject.slice(0,65)}${i.subject.length>65?'…':''}</td>
-      <td>${i.assigned_to?.name||'<span style="color:var(--t3)">Unassigned</span>'}</td>
-      <td>${dueTd}</td>
-      <td>${sbadge(i.status?.name)}</td>
-    </tr>`;
-  }).join('');
-}
+  if(!list.length){el.innerHTML='';return;}
 
+  // Build row state objects
+  const rows=[];
+  list.forEach(i=>{
+    const memKids=S.issues.filter(c=>c.parent&&Number(c.parent.id)===Number(i.id));
+    const cached=_childCache[i.id];
+    const kids=memKids.length ? memKids : (Array.isArray(cached) ? cached : []);
+    rows.push({issue:i, kids, fetched:memKids.length>0||Array.isArray(cached), expanded:true});
+  });
+
+  // Store globally so togglePinnedChildren can access
+  window._pinnedList=rows;
+
+  const doRender=()=>{
+    const el2=document.getElementById('pinned-tbody');
+    if(!el2)return;
+    el2.innerHTML=rows.map(r=>{
+      const hasKids=r.kids.length>0;
+      let h=issueRow(r.issue,false,hasKids,r.expanded);
+      if(hasKids&&r.expanded) r.kids.forEach(c=>{h+=issueRow(c,true,false,false);});
+      return h;
+    }).join('');
+  };
+
+  // Wire up the shared render fn for toggle
+  _renderPinnedFromList=doRender;
+  doRender();
+
+  // Fetch children not yet in cache
+  rows.forEach(r=>{
+    if(r.fetched)return;
+    r.fetched=true;
+    fetchChildren(r.issue.id).then(kids=>{
+      r.kids=kids||[];
+      doRender();
+    });
+  });
+}
 // ── TRACKER FOCUS (per-team) ──────────────────
 let _tfCharts={};
 let _assignTeamId=null;
