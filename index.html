@@ -403,13 +403,15 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
   z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem;
   opacity:0;pointer-events:none;transition:opacity .2s;}
 .overlay.on{opacity:1;pointer-events:all;}
-.modal{background:var(--s1);border:1px solid var(--b2);border-radius:20px;padding:1.8rem;
-  width:100%;max-width:500px;max-height:88vh;overflow-y:auto;
+.modal{background:var(--s1);border:1px solid var(--b2);border-radius:20px;padding:0;
+  width:100%;max-width:500px;max-height:90vh;overflow:hidden;
+  display:flex;flex-direction:column;
   transform:translateY(18px) scale(.98);transition:all .22s cubic-bezier(.16,1,.3,1);
   box-shadow:0 40px 80px rgba(0,0,0,.5);}
+.modal-body{flex:1;overflow-y:auto;padding:1.8rem 1.8rem 0 1.8rem;}
 .overlay.on .modal{transform:none;}
 .mtitle{font-size:1rem;font-weight:800;margin-bottom:1.3rem;letter-spacing:-.4px;}
-.mfoot{display:flex;gap:.55rem;justify-content:flex-end;margin-top:1.3rem;}
+.mfoot{display:flex;gap:.55rem;justify-content:flex-end;padding:1rem 1.8rem 1.4rem 1.8rem;border-top:1px solid var(--b1);background:var(--s1);flex-shrink:0;}
 .mlist{max-height:180px;overflow-y:auto;}
 .mrow{display:flex;align-items:center;gap:.6rem;padding:.5rem 0;border-bottom:1px solid var(--b1);cursor:pointer;}
 .mrow:last-child{border-bottom:none;}
@@ -888,6 +890,7 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
 <!-- TEAM MODAL -->
 <div class="overlay" id="t-modal">
   <div class="modal">
+    <div class="modal-body">
     <div class="mtitle" id="m-title">New Team</div>
     <label class="lbl">Name</label>
     <input class="inp" id="t-name" placeholder="e.g. Backend Squad"/>
@@ -898,9 +901,13 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
     <div style="font-size:.7rem;font-weight:700;color:var(--t3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.35rem">Add Members</div>
     <input class="inp" id="m-search" placeholder="Search to add…" oninput="filterMems()" style="margin-bottom:.5rem"/>
     <div class="mlist" id="m-list"></div>
-    <div class="mfoot">
-      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-p btn-sm" onclick="saveTeam()">Save Team</button>
+    </div>
+    <div class="mfoot" style="justify-content:space-between">
+      <button class="btn btn-danger btn-sm" id="m-del-btn" style="display:none" onclick="delEditingTeam()">Delete Team</button>
+      <div style="display:flex;gap:.55rem">
+        <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-p btn-sm" onclick="saveTeam()">Save Team</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2098,7 +2105,7 @@ function renderTeamsGrid(){
   const em=document.getElementById('t-empty');
   if(!S.teams.length){el.innerHTML='';em.style.display='block';return;}
   em.style.display='none';
-  el.innerHTML=S.teams.map(t=>{
+  el.innerHTML=S.teams.map((t,i)=>{
     const focus=t.focus||{trackers:[],issues:[]};
     const hasFocus=focus.trackers.length||focus.issues.length;
     return`<div class="tcard">
@@ -2109,7 +2116,7 @@ function renderTeamsGrid(){
       <div class="tcard-acts">
         <button class="btn btn-ghost btn-sm" onclick="openAssignPanel('${t.id}')" title="Assign trackers & issues">⚡ Focus</button>
         <button class="btn btn-ghost btn-sm" onclick="editT('${t.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="delT('${t.id}')">✕</button>
+        <button class="btn btn-danger btn-sm" onclick="delTByIndex(${i})">✕</button>
       </div>
     </div>
     <div style="font-size:.7rem;color:var(--t2);margin-bottom:.6rem">${t.members.length} member${t.members.length!==1?'s':''}</div>
@@ -2123,13 +2130,51 @@ function renderTeamsGrid(){
 }
 function openModal(eid=null){
   S.editTeam=eid;S.selColor=CLRS[0];S.selMems=new Set();
-  if(eid){const t=S.teams.find(t=>t.id==eid);if(t){document.getElementById('t-name').value=t.name;S.selColor=t.color;t.members.forEach(m=>S.selMems.add(m.id));document.getElementById('m-title').textContent='Edit Team';}}
-  else{document.getElementById('t-name').value='';document.getElementById('m-title').textContent='New Team';}
+  const delBtn=document.getElementById('m-del-btn');
+  if(eid){const t=S.teams.find(t=>t.id==eid);if(t){document.getElementById('t-name').value=t.name;S.selColor=t.color;t.members.forEach(m=>S.selMems.add(m.id));document.getElementById('m-title').textContent='Edit Team';if(delBtn)delBtn.style.display='inline-flex';}}
+  else{document.getElementById('t-name').value='';document.getElementById('m-title').textContent='New Team';if(delBtn)delBtn.style.display='none';}
   renderSw();renderMems();document.getElementById('m-search').value='';
   document.getElementById('t-modal').classList.add('on');
 }
 function closeModal(){document.getElementById('t-modal').classList.remove('on');}
 function editT(id){openModal(id);}
+function delTByIndex(i){
+  if(i<0||i>=S.teams.length)return;
+  const name=S.teams[i].name;
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML=`<div style="background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:1.6rem 2rem;max-width:360px;width:90%;box-shadow:0 24px 64px rgba(0,0,0,.6)">
+    <div style="font-weight:800;font-size:1rem;margin-bottom:.5rem">Delete Team?</div>
+    <div style="font-size:.85rem;color:var(--t2);margin-bottom:1.2rem">Delete <b>${name}</b>? This cannot be undone.</div>
+    <div style="display:flex;gap:.6rem;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" id="_dc">Cancel</button>
+      <button class="btn btn-danger btn-sm" id="_dd">Delete</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#_dc').onclick=()=>overlay.remove();
+  overlay.querySelector('#_dd').onclick=()=>{overlay.remove();S.teams.splice(i,1);saveTeams();renderApp();};
+}
+function delEditingTeam(){
+  if(!S.editTeam)return;
+  const idx=S.teams.findIndex(t=>t.id==S.editTeam||String(t.id)==String(S.editTeam));
+  if(idx===-1){closeModal();return;}
+  const name=S.teams[idx].name;
+  closeModal();
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML=`<div style="background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:1.6rem 2rem;max-width:360px;width:90%;box-shadow:0 24px 64px rgba(0,0,0,.6)">
+    <div style="font-weight:800;font-size:1rem;margin-bottom:.5rem">Delete Team?</div>
+    <div style="font-size:.85rem;color:var(--t2);margin-bottom:1.2rem">Delete <b>${name}</b>? This cannot be undone.</div>
+    <div style="display:flex;gap:.6rem;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" id="_dc2">Cancel</button>
+      <button class="btn btn-danger btn-sm" id="_dd2">Delete</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#_dc2').onclick=()=>overlay.remove();
+  overlay.querySelector('#_dd2').onclick=()=>{overlay.remove();S.teams.splice(idx,1);saveTeams();renderApp();};
+}
 function delT(id){
   const t=S.teams.find(x=>x.id==id);if(!t)return;
   const overlay=document.createElement('div');
