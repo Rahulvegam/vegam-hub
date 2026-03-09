@@ -980,10 +980,13 @@ function setFetch(on,pct=0,msg=''){
 }
 
 // ── API ───────────────────────────────────────
+let _forceRefresh=false; // set true only during explicit Refresh
+
 async function api(path,params={}){
   const qs=new URLSearchParams({...params,key:S.key}).toString();
   const t=encodeURIComponent(`${path}?${qs}`);
-  const r=await fetch(`${PROXY}?target=${t}`);
+  const refreshParam=_forceRefresh?'&refresh=1':'';
+  const r=await fetch(`${PROXY}?target=${t}${refreshParam}`);
   if(!r.ok)throw new Error('HTTP '+r.status);
   return r.json();
 }
@@ -1000,15 +1003,15 @@ async function doConnect(){
   btn.textContent='Connecting…';btn.disabled=true;
   setFetch(true,8,'Connecting…');
   try{
-    // Fire both in parallel — projects call also proves connection works
-    const [rd,pd]=await Promise.all([
-      api('/issues.json',{limit:1}),
-      api('/projects.json',{limit:100}),
+    // Test connection + get projects via worker (both cached)
+    const [rd, pd] = await Promise.all([
+      api('/issues.json', {limit:1}),
+      fetch(`${PROXY}?action=getProjects&key=${encodeURIComponent(key)}`).then(r=>r.json()),
     ]);
-    if(!rd||rd.issues===undefined)throw new Error('Invalid response');
-    localStorage.setItem('vg_url',url);
-    localStorage.setItem('vg_key',key);
-    S.allProjects=pd.projects||[];
+    if (!rd || rd.issues === undefined) throw new Error('Invalid response');
+    localStorage.setItem('vg_url', url);
+    localStorage.setItem('vg_key', key);
+    S.allProjects = pd.projects || [];
     setFetch(false);
     if(S.selProj.length){await launchApp();}
     else{
@@ -1148,114 +1151,81 @@ function setChip(pid,done,count){
 }
 
 // ── LOAD ALL DATA ─────────────────────────────
-// STRATEGY: One global query (no project_id) covers all projects at once.
-// This reduces 48+ parallel streams down to a single sequential stream.
-// Max 2 concurrent requests, 500ms pause between — keeps Redmine responsive.
+// Dashboard sends ONE request to the Cloudflare Worker.
+// Worker returns a full snapshot from KV cache.
+// Redmine is NEVER called directly from the browser.
 async function loadAll(){
-  const seen=new Set(); S.issues=[];
+  S.issues = []; S.users = []; S.versions = [];
 
-  const rebuildUsers=()=>{
-    const m=new Map();
-    S.issues.forEach(i=>{
-      if(i.assigned_to&&!m.has(i.assigned_to.id))
-        m.set(i.assigned_to.id,{id:i.assigned_to.id,firstname:i.assigned_to.name});
-      if(i.author&&!m.has(i.author.id))
-        m.set(i.author.id,{id:i.author.id,firstname:i.author.name});
+  const rebuildUsers = () => {
+    const m = new Map();
+    S.issues.forEach(i => {
+      if (i.assigned_to && !m.has(i.assigned_to.id))
+        m.set(i.assigned_to.id, { id: i.assigned_to.id, firstname: i.assigned_to.name });
+      if (i.author && !m.has(i.author.id))
+        m.set(i.author.id, { id: i.author.id, firstname: i.author.name });
     });
-    S.users=Array.from(m.values()).sort((a,b)=>a.firstname.localeCompare(b.firstname));
-    if(document.getElementById('t-modal')?.classList.contains('on')){
-      renderMems(document.getElementById('m-search')?.value||'');
-    }
+    S.users = Array.from(m.values()).sort((a, b) => a.firstname.localeCompare(b.firstname));
+    if (document.getElementById('t-modal')?.classList.contains('on'))
+      renderMems(document.getElementById('m-search')?.value || '');
   };
 
-  const merge=arr=>{
-    let added=0;
-    arr.forEach(i=>{if(!seen.has(i.id)){seen.add(i.id);S.issues.push(i);added++;}});
-    if(added) rebuildUsers();
-  };
+  updLoad(10, 'Loading snapshot…');
 
-  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  try {
+    // Build project list param
+    const projParam = S.selProj.length ? S.selProj.join(',') : '';
+    const refreshParam = _forceRefresh ? '&refresh=1' : '';
+    const url = `${PROXY}?action=getSnapshot&key=${encodeURIComponent(S.key)}${projParam ? '&projects=' + encodeURIComponent(projParam) : ''}${refreshParam}`;
 
-  // ── Build project filter params ──────────────
-  // If specific projects selected, use project_id filter per-project (sequential).
-  // If "all" selected or empty, use a SINGLE global query — far less load on Redmine.
-  const projs = S.selProj.length ? S.selProj : [];
-  const useGlobal = projs.length === 0;
+    updLoad(15, _forceRefresh ? 'Fetching fresh data from Redmine…' : 'Loading from cache…');
 
-  updLoad(5, 'Connecting to Redmine…');
+    const res  = await fetch(url);
+    const cacheHit = res.headers.get('X-Cache') === 'HIT';
+    const cacheAge = res.headers.get('X-Cache-Age') || '?';
 
-  // ── GLOBAL MODE: single stream, no project_id ─
-  if(useGlobal){
-    // Page 1 — get total count
-    const p1 = await api('/issues.json', {limit:100, offset:0, status_id:'*'}).catch(()=>({issues:[],total_count:0}));
-    merge(p1.issues||[]);
-    const total = p1.total_count||0;
-    updLoad(10, `${S.issues.length.toLocaleString()} / ${total.toLocaleString()} issues…`);
-    updateSbMeta(); renderApp();
+    if (!res.ok) throw new Error('Snapshot fetch failed: HTTP ' + res.status);
 
-    // Remaining pages — 2 at a time, 500ms pause
-    const offsets=[];
-    for(let o=100;o<total;o+=100) offsets.push(o);
-    for(let i=0;i<offsets.length;i+=2){
-      if(i>0) await sleep(500);
-      const chunk=offsets.slice(i,i+2);
-      const res=await Promise.all(chunk.map(o=>
-        api('/issues.json',{limit:100,offset:o,status_id:'*'}).then(d=>d.issues||[]).catch(()=>[])
-      ));
-      res.forEach(r=>merge(r));
-      const pct=10+Math.round(((i+chunk.length)/offsets.length)*82);
-      updLoad(pct,`${S.issues.length.toLocaleString()} / ${total.toLocaleString()} issues…`);
-      updateSbMeta(); liveUpdate();
+    updLoad(60, cacheHit ? `Cache hit (${cacheAge}s old) — parsing…` : 'Fresh data received — parsing…');
+
+    const data = await res.json();
+    const issues = data.issues || [];
+
+    // Feed issues in chunks so UI stays responsive during parse
+    const CHUNK = 2000;
+    for (let i = 0; i < issues.length; i += CHUNK) {
+      const chunk = issues.slice(i, i + CHUNK);
+      chunk.forEach(issue => S.issues.push(issue));
+      rebuildUsers();
+      const pct = 60 + Math.round(((i + CHUNK) / issues.length) * 35);
+      updLoad(Math.min(95, pct), `${S.issues.length.toLocaleString()} / ${issues.length.toLocaleString()} issues parsed…`);
+      updateSbMeta();
+      if (i === 0) renderApp(); // show dashboard with first chunk immediately
+      // Yield to browser between chunks
+      await new Promise(r => setTimeout(r, 0));
     }
 
-  } else {
-    // ── PROJECT MODE: one project at a time, sequential ─
-    // Fetch projects one-by-one — no parallelism — so Redmine handles each calmly.
-    let projsDone=0;
-    for(const pid of projs){
-      // Page 1 of this project
-      const p1=await api('/issues.json',{limit:100,offset:0,status_id:'*',project_id:pid}).catch(()=>({issues:[],total_count:0}));
-      merge(p1.issues||[]);
-      const total=p1.total_count||0;
-      setChip(pid, false, p1.issues?.length||0);
-
-      // Remaining pages for this project — 2 at a time, 400ms pause
-      const offsets=[];
-      for(let o=100;o<total;o+=100) offsets.push(o);
-      for(let i=0;i<offsets.length;i+=2){
-        await sleep(400);
-        const chunk=offsets.slice(i,i+2);
-        const res=await Promise.all(chunk.map(o=>
-          api('/issues.json',{limit:100,offset:o,status_id:'*',project_id:pid}).then(d=>d.issues||[]).catch(()=>[])
-        ));
-        res.forEach(r=>merge(r));
-      }
-
-      setChip(pid, true, S.issues.filter(x=>x.project?.identifier===pid).length);
-      projsDone++;
-      const pct=5+Math.round((projsDone/projs.length)*87);
-      updLoad(pct,`${S.issues.length.toLocaleString()} issues — ${projsDone}/${projs.length} projects…`);
-      updateSbMeta(); liveUpdate();
-
-      // Pause 500ms between projects — let Redmine breathe
-      if(projsDone < projs.length) await sleep(500);
-    }
+  } catch (e) {
+    console.error('Snapshot load failed:', e);
+    updLoad(100, '⚠ Load failed — check connection');
+    setFetch(false);
+    return;
   }
 
-  // ── Versions: sequential, one at a time ──────
-  try{
-    S.versions=[];
-    const vprojs=S.selProj.length?S.selProj:[];
-    for(const pid of vprojs){
-      const d=await api('/projects/'+pid+'/versions.json').catch(()=>({versions:[]}));
-      S.versions.push(...(d.versions||[]));
+  // Versions — sequential, light load
+  try {
+    S.versions = [];
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    for (const pid of (S.selProj.length ? S.selProj : [])) {
+      const d = await api('/projects/' + pid + '/versions.json').catch(() => ({ versions: [] }));
+      S.versions.push(...(d.versions || []));
       await sleep(200);
     }
-  }catch(e){S.versions=[];}
+  } catch(e) { S.versions = []; }
 
-  updLoad(100,`✓ ${S.issues.length.toLocaleString()} issues loaded`);
-  setTimeout(()=>setFetch(false),1500);
-  S.lastRefresh=new Date(); updateSync(); updateSbMeta(); renderApp();
+  updLoad(100, `✓ ${S.issues.length.toLocaleString()} issues loaded`);
+  setTimeout(() => setFetch(false), 1500);
+  S.lastRefresh = new Date(); updateSync(); updateSbMeta(); renderApp();
 }
 function liveUpdate(){
   // update counts on whichever section is visible
@@ -1283,7 +1253,9 @@ async function doRefresh(){
   S.issues=[];S.users=[];S.versions=[];
   setLoadingDash();
   renderTeamNav();renderDashTabs();
-  await loadAll();
+  // refresh=1 tells worker to bypass KV and fetch fresh from Redmine
+  _forceRefresh=true;
+  try{ await loadAll(); }finally{ _forceRefresh=false; }
   btn.textContent='⟳ Refresh';btn.disabled=false;
 }
 
