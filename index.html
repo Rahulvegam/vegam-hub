@@ -1410,12 +1410,14 @@ function renderDash(){
     </div>
     ${pinnedIssuesList.length?`<div class="card" style="border-color:rgba(99,102,241,.25);margin-bottom:1.2rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem">
-        <div class="ctitle" style="color:var(--a);margin-bottom:0">⚡ Pinned Issues <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${pinnedIssuesList.length} total)</span></div>
+        <div class="ctitle" style="color:var(--a);margin-bottom:0">⚡ Pinned Issues
+          <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${pinnedIssuesList.length} total${odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length?' · <span style="color:var(--danger);font-weight:600">'+odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length+' overdue</span>':''})</span>
+        </div>
       </div>
       <div class="tw"><table><thead><tr><th>#</th><th>Title</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead>
       <tbody id="pinned-tbody"></tbody></table></div>
     </div>`:''}
-    ${odList.length?`<div class="card" style="border-color:rgba(255,77,109,.2);margin-bottom:1.2rem">
+    ${!pinnedIssuesList.length&&odList.length?`<div class="card" style="border-color:rgba(255,77,109,.2);margin-bottom:1.2rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem">
         <div class="ctitle" style="color:var(--danger);margin-bottom:0">⚠ Overdue Issues <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${odList.length} total)</span></div>
         <span style="font-size:.7rem;color:var(--t3);font-family:'JetBrains Mono',monospace">Showing 50 per page</span>
@@ -1472,13 +1474,19 @@ function renderPinnedTable(list){
   const el=document.getElementById('pinned-tbody');
   if(!el)return;
   const today=new Date();today.setHours(0,0,0,0);
-  el.innerHTML=list.map((i,idx)=>{
+  el.innerHTML=list.map(i=>{
     const isOverdue=i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name);
-    return`<tr class="od-row">
+    const dueTd=i.due_date
+      ? isOverdue
+        ? `<span style="color:var(--danger);font-family:'JetBrains Mono',monospace;font-size:.72rem">${i.due_date}</span>
+           <span title="Overdue" style="margin-left:.3rem;background:var(--danger);color:#fff;font-size:.58rem;font-weight:700;padding:.1rem .35rem;border-radius:4px;vertical-align:middle">OVERDUE</span>`
+        : `<span style="color:var(--t2);font-family:'JetBrains Mono',monospace;font-size:.72rem">${i.due_date}</span>`
+      : '<span style="color:var(--t3)">—</span>';
+    return`<tr class="od-row" style="${isOverdue?'background:rgba(239,68,68,.04);':''}">
       <td><a href="${S.url}/issues/${i.id}" target="_blank" style="color:var(--a);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.72rem">#${i.id}</a></td>
       <td style="color:var(--t1)">${i.subject.slice(0,65)}${i.subject.length>65?'…':''}</td>
       <td>${i.assigned_to?.name||'<span style="color:var(--t3)">Unassigned</span>'}</td>
-      <td style="font-family:'JetBrains Mono',monospace;font-size:.72rem;${isOverdue?'color:var(--danger)':'color:var(--t2)'}">${i.due_date||'<span style="color:var(--t3)">—</span>'}</td>
+      <td>${dueTd}</td>
       <td>${sbadge(i.status?.name)}</td>
     </tr>`;
   }).join('');
