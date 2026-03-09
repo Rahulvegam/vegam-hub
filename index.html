@@ -1282,7 +1282,7 @@ function go(name){
   else if(name==='cal')renderCal();
   else if(name==='issues'){renderIssFilters();renderIss();}
   else if(name==='dash'){renderTeamNav();renderDashTabs();renderDash();}
-  else if(name==='teams'){renderTeamsGrid();}
+  else if(name==='teams'){S.curTeam='all';renderTeamNav();renderTeamsGrid();}
 }
 function openSb(){document.getElementById('sidebar').classList.add('open');document.getElementById('mob-bg').classList.add('on');}
 function closeSb(){document.getElementById('sidebar').classList.remove('open');document.getElementById('mob-bg').classList.remove('on');}
@@ -1304,8 +1304,9 @@ function switchTeam(tid){
 
 // ── TEAM NAV ──────────────────────────────────
 function renderTeamNav(){
+  const onDash=document.getElementById('s-dash')?.classList.contains('on');
   document.getElementById('team-nav').innerHTML=S.teams.map(t=>{
-    const isActive=String(S.curTeam)===String(t.id);
+    const isActive=onDash&&String(S.curTeam)===String(t.id);
     return`<div class="ni${isActive?' active-team':''}" onclick="switchTeam('${t.id}')"
       style="${isActive?`border-left:2.5px solid ${t.color};background:${t.color}18;color:var(--t1);font-weight:600`:''}"
     >
