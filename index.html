@@ -874,6 +874,7 @@ let S={
   lastRefresh:null,fetching:false,fetchPct:0,
   recentUsers:[],
   fromApp:false,
+  _pinnedProjIds:new Set(),
 };
 
 // ── PREFILL CREDENTIALS ───────────────────────
@@ -1026,12 +1027,18 @@ function closeProjPanel(){
   document.getElementById('proj-panel').style.display='none';
 }
 function getPinnedProjectIds(){
-  // Collect all project identifiers that have at least one pinned issue
+  // Use the pre-built cache from Phase 0 if available (populated immediately after pinned fetch)
+  if(S._pinnedProjIds&&S._pinnedProjIds.size) return S._pinnedProjIds;
+  // Fallback: derive from S.issues (once full load is done)
   const pinnedIssueIds=new Set(S.teams.flatMap(t=>t.focus?.issues||[]).map(Number).filter(Boolean));
+  const projIdToIdent={};
+  S.allProjects.forEach(p=>{if(p.id&&p.identifier)projIdToIdent[p.id]=p.identifier;});
   const pinnedProjects=new Set();
   S.issues.forEach(i=>{
-    if(pinnedIssueIds.has(Number(i.id))&&i.project?.identifier)
-      pinnedProjects.add(i.project.identifier);
+    if(!pinnedIssueIds.has(Number(i.id)))return;
+    if(i.project?.identifier){pinnedProjects.add(i.project.identifier);return;}
+    if(i.project?.id&&projIdToIdent[i.project.id])
+      pinnedProjects.add(projIdToIdent[i.project.id]);
   });
   return pinnedProjects;
 }
@@ -1159,10 +1166,22 @@ async function loadAll(){
     const pinned=await Promise.all(
       allPinnedIds.map(id=>api('/issues/'+id+'.json',{}).then(d=>d.issue).catch(()=>null))
     );
-    merge(pinned.filter(Boolean));
+    const validPinned=pinned.filter(Boolean);
+    merge(validPinned);
+    // Cache pinned project identifiers immediately so project panel can show them
+    // even before full load. /issues/ID.json returns project as {id,name} — no identifier,
+    // so we match by numeric project id against S.allProjects
+    const projById={};
+    S.allProjects.forEach(p=>{if(p.id)projById[p.id]=p.identifier;});
+    S._pinnedProjIds=new Set(validPinned.map(i=>{
+      if(i.project?.identifier)return i.project.identifier;
+      if(i.project?.id)return projById[i.project.id];
+      return null;
+    }).filter(Boolean));
     updLoad(8,`Pinned issues ready — loading full project data…`);
     renderApp(); // ← dashboard is usable NOW with pinned data
   } else {
+    S._pinnedProjIds=new Set();
     updLoad(5,'Loading issues…');
   }
 
