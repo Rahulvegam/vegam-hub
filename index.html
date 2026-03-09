@@ -1270,17 +1270,32 @@ function go(name){
   else if(name==='sprint')renderSprints();
   else if(name==='cal')renderCal();
   else if(name==='issues'){renderIssFilters();renderIss();}
-  else if(name==='dash')renderDash();
+  else if(name==='dash'){renderTeamNav();renderDashTabs();renderDash();}
   else if(name==='teams'){renderTeamsGrid();}
 }
 function openSb(){document.getElementById('sidebar').classList.add('open');document.getElementById('mob-bg').classList.add('on');}
 function closeSb(){document.getElementById('sidebar').classList.remove('open');document.getElementById('mob-bg').classList.remove('on');}
 
+// ── TEAM SWITCHING (single source of truth) ───
+function switchTeam(tid){
+  S.curTeam=String(tid);
+  // Make sure dashboard section is visible
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
+  document.getElementById('s-dash')?.classList.add('on');
+  document.querySelector('[data-s="dash"]')?.classList.add('on');
+  document.getElementById('tb-title').textContent=TITLES['dash']||'Dashboard';
+  closeSb();
+  renderTeamNav();
+  renderDashTabs();
+  renderDash();
+}
+
 // ── TEAM NAV ──────────────────────────────────
 function renderTeamNav(){
   document.getElementById('team-nav').innerHTML=S.teams.map(t=>{
     const isActive=String(S.curTeam)===String(t.id);
-    return`<div class="ni${isActive?' active-team':''}" onclick="S.curTeam='${t.id}';go('dash')"
+    return`<div class="ni${isActive?' active-team':''}" onclick="switchTeam('${t.id}')"
       style="${isActive?`border-left:2.5px solid ${t.color};background:${t.color}18;color:var(--t1);font-weight:600`:''}"
     >
       <span class="tdot" style="background:${t.color};${isActive?'box-shadow:0 0 6px '+t.color:''}"></span>${t.name}
@@ -1295,7 +1310,7 @@ function renderDashTabs(){
     const isActive=String(S.curTeam)===String(t.id);
     const focus=t.focus||{trackers:[],issues:[]};
     const hasFocus=focus.trackers.length||focus.issues.length;
-    return`<div class="tab${isActive?' on':''}" onclick="S.curTeam='${t.id}';renderDashTabs();renderTeamNav();renderDash()"
+    return`<div class="tab${isActive?' on':''}" onclick="switchTeam('${t.id}')"
       style="${isActive&&t.color&&t.id!=='all'?`background:${t.color};border-color:${t.color};box-shadow:0 2px 12px ${t.color}55`:''}"
     >
       <span style="width:7px;height:7px;border-radius:50%;background:${isActive?'rgba(255,255,255,.9)':t.color};display:inline-block;flex-shrink:0;transition:background .15s"></span>
@@ -1309,7 +1324,7 @@ function renderDashTabs(){
 
 function getIss(tid){
   if(tid==='all')return S.issues;
-  const t=S.teams.find(t=>t.id==tid);if(!t)return S.issues;
+  const t=S.teams.find(t=>String(t.id)===String(tid));if(!t)return S.issues;
   const memberIds=new Set(t.members.map(m=>Number(m.id)));
   const focus=t.focus||{trackers:[],issues:[]};
   const hasFocus=focus.trackers.length||focus.issues.length;
@@ -1359,9 +1374,12 @@ function renderDash(){
   const odList=iss.filter(i=>i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name));
   Object.values(DC).forEach(c=>{try{c.destroy();}catch(_){}});DC={};
 
-  const curTeamObj=S.teams.find(t=>t.id==S.curTeam);
+  const curTeamObj=S.teams.find(t=>String(t.id)===String(S.curTeam));
   const teamFocus=curTeamObj?.focus||{trackers:[],issues:[]};
   const hasFocus=S.curTeam!=='all'&&(teamFocus.trackers.length||teamFocus.issues.length);
+  // All pinned issues (in pin order), regardless of status
+  const _pinIds=(teamFocus.issues||[]).map(x=>Number(x));
+  const pinnedIssuesList=_pinIds.length ? _pinIds.map(pid=>S.issues.find(i=>Number(i.id)===pid)).filter(Boolean) : [];
 
   document.getElementById('dash-body').innerHTML=`
     ${S.curTeam!=='all'&&curTeamObj?`
@@ -1390,6 +1408,13 @@ function renderDash(){
       <div class="card"><div class="ctitle">Status Breakdown<span class="info-btn">i<span class="tip">Shows how all issues are distributed across each status (New, In Progress, Closed, etc.). Includes all statuses.</span></span></div><div class="ch" style="height:300px"><canvas id="d-s"></canvas></div></div>
       <div class="card"><div class="ctitle">Member Workload<span class="csub"> top 10</span><span class="info-btn">i<span class="tip">Shows top 10 members by number of active (non-closed) issues assigned. Closed &amp; Rejected issues are excluded.</span></span></div><div class="ch" style="height:300px"><canvas id="d-w"></canvas></div></div>
     </div>
+    ${pinnedIssuesList.length?`<div class="card" style="border-color:rgba(99,102,241,.25);margin-bottom:1.2rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem">
+        <div class="ctitle" style="color:var(--a);margin-bottom:0">⚡ Pinned Issues <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${pinnedIssuesList.length} total)</span></div>
+      </div>
+      <div class="tw"><table><thead><tr><th>#</th><th>Title</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead>
+      <tbody id="pinned-tbody"></tbody></table></div>
+    </div>`:''}
     ${odList.length?`<div class="card" style="border-color:rgba(255,77,109,.2);margin-bottom:1.2rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem">
         <div class="ctitle" style="color:var(--danger);margin-bottom:0">⚠ Overdue Issues <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${odList.length} total)</span></div>
@@ -1404,6 +1429,7 @@ function renderDash(){
   // render overdue table with pagination
   odPage=0; _odList=odList;
   renderOdTable();
+  renderPinnedTable(pinnedIssuesList);
 
   const tc=getCSS('--t1'),t2=getCSS('--t2'),t3=getCSS('--t3');
   setTimeout(()=>{
@@ -1440,6 +1466,22 @@ function renderOdTable(){
       ${odPage<tp-1?`<button class="btn btn-ghost btn-sm" onclick="odPage++;renderOdTable()">Next →</button>`:''}
     </div>
   </div>`;
+}
+
+function renderPinnedTable(list){
+  const el=document.getElementById('pinned-tbody');
+  if(!el)return;
+  const today=new Date();today.setHours(0,0,0,0);
+  el.innerHTML=list.map((i,idx)=>{
+    const isOverdue=i.due_date&&new Date(i.due_date)<today&&!['Closed','Rejected'].includes(i.status?.name);
+    return`<tr class="od-row">
+      <td><a href="${S.url}/issues/${i.id}" target="_blank" style="color:var(--a);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.72rem">#${i.id}</a></td>
+      <td style="color:var(--t1)">${i.subject.slice(0,65)}${i.subject.length>65?'…':''}</td>
+      <td>${i.assigned_to?.name||'<span style="color:var(--t3)">Unassigned</span>'}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:.72rem;${isOverdue?'color:var(--danger)':'color:var(--t2)'}">${i.due_date||'<span style="color:var(--t3)">—</span>'}</td>
+      <td>${sbadge(i.status?.name)}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── TRACKER FOCUS (per-team) ──────────────────
