@@ -565,6 +565,14 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
    MOBILE
 ══════════════════════════════════ */
 .mob-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:90;display:none;}
+/* Admin lock */
+.admin-lock-btn{display:flex;align-items:center;gap:.4rem;padding:.3rem .7rem;border-radius:8px;border:1px solid var(--b2);background:none;cursor:pointer;font-size:.72rem;font-weight:600;color:var(--t2);transition:all .15s;}
+.admin-lock-btn:hover{border-color:var(--a);color:var(--a);background:rgba(99,102,241,.08);}
+.admin-lock-btn.unlocked{border-color:var(--ok);color:var(--ok);background:rgba(16,185,129,.08);}
+.admin-lock-btn.unlocked:hover{border-color:var(--danger);color:var(--danger);background:rgba(239,68,68,.08);}
+#admin-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:99997;display:none;align-items:center;justify-content:center;}
+#admin-modal{background:var(--s1);border:1px solid var(--b2);border-radius:20px;padding:2rem;width:340px;max-width:92vw;box-shadow:0 24px 64px rgba(0,0,0,.4);}
+.readonly-badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.63rem;font-weight:700;padding:.2rem .55rem;border-radius:6px;background:rgba(245,158,11,.12);color:var(--a4);border:1px solid rgba(245,158,11,.3);letter-spacing:.03em;}
 .mob-bg.on{display:block;}
 @media(max-width:768px){
   .sidebar{transform:translateX(-100%);}
@@ -636,6 +644,27 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
 
 <div class="mob-bg" id="mob-bg" onclick="closeSb()"></div>
 
+<!-- ══ ADMIN PASSWORD MODAL ══ -->
+<div id="admin-modal-overlay" style="display:none">
+  <div id="admin-modal">
+    <div style="font-size:1.1rem;font-weight:800;letter-spacing:-.4px;margin-bottom:.25rem" id="adm-title">🔐 Admin Access</div>
+    <div style="font-size:.78rem;color:var(--t2);margin-bottom:1.4rem" id="adm-sub">Enter admin password to unlock editing.</div>
+    <input class="inp" id="adm-pw-input" type="password" placeholder="Password…" style="margin-bottom:.7rem"
+      onkeydown="if(event.key==='Enter')adminSubmit()"/>
+    <div id="adm-err" style="font-size:.72rem;color:var(--danger);min-height:1rem;margin-bottom:.5rem"></div>
+    <div style="display:flex;gap:.6rem">
+      <button class="btn btn-p" style="flex:1" onclick="adminSubmit()" id="adm-submit-btn">Unlock</button>
+      <button class="btn btn-ghost" onclick="closeAdminModal()">Cancel</button>
+    </div>
+    <div id="adm-setpw-wrap" style="display:none;margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--b2)">
+      <div style="font-size:.72rem;font-weight:700;color:var(--t2);margin-bottom:.5rem">Set new admin password</div>
+      <input class="inp" id="adm-new-pw" type="password" placeholder="New password…" style="margin-bottom:.5rem"/>
+      <input class="inp" id="adm-new-pw2" type="password" placeholder="Confirm password…" style="margin-bottom:.5rem"/>
+      <button class="btn btn-p btn-full" onclick="adminSetPassword()">Save Password</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ INLINE PROJECT PANEL (slide-over within app) ══ -->
 <div id="proj-panel-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);z-index:150;" onclick="closeProjPanel()"></div>
 <div id="proj-panel" style="display:none;position:fixed;top:0;right:0;bottom:0;width:400px;background:var(--s1);border-left:1px solid var(--b2);z-index:151;flex-direction:column;box-shadow:-12px 0 48px rgba(0,0,0,.4);">
@@ -692,7 +721,7 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
     </div>
 
     <!-- Project switcher -->
-    <div class="sb-proj-btn" onclick="openProjPanel()">
+    <div class="sb-proj-btn" onclick="adminGuard(openProjPanel)" id="sb-proj-btn">
       <span class="sb-proj-btn-label">📂 Projects</span>
       <span class="sb-proj-btn-val" id="sb-proj-val">0 selected</span>
     </div>
@@ -732,7 +761,9 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
       </div>
       <div class="tb-right">
         <span class="tb-sync" id="tb-sync"></span>
+        <span class="readonly-badge" id="viewer-badge" style="display:none">👁 Viewer</span>
         <button class="btn btn-ghost btn-sm" id="ref-btn" onclick="doRefresh()">⟳ Refresh</button>
+        <button class="admin-lock-btn" id="admin-lock-btn" onclick="adminLockClick()" title="Admin access">🔒 Admin</button>
         <div class="theme-tog" onclick="toggleTheme()">☀️</div>
       </div>
     </div>
@@ -819,7 +850,7 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
             </div>
             <div style="font-size:.76rem;color:var(--t2);margin-top:.15rem">Shared across all users · saved to cloud</div>
           </div>
-          <button class="btn btn-p btn-sm" onclick="openModal()">+ New Team</button>
+          <button class="btn btn-p btn-sm" id="new-team-btn" onclick="adminGuard(openModal)">+ New Team</button>
         </div>
 
         <div class="tgrid" id="t-grid"></div>
@@ -1105,8 +1136,10 @@ async function launchApp(){
   document.getElementById('app').style.display='flex';
   document.getElementById('sb-url').textContent=S.url.replace('https://','');
   setLoadingDash();
-  // Load shared teams from KV (merges with localStorage cache as fallback)
+  // Load shared teams + sync admin pw hash from KV
   await loadTeamsFromKV();
+  await syncAdminPw();
+  applyAdminState();
   renderTeamNav();renderDashTabs();renderTeamsGrid();
   await loadAll();
   renderApp();
@@ -1412,7 +1445,7 @@ function renderDash(){
           ${teamFocus.issues?.length?`<span class="chip" style="font-size:.62rem">${teamFocus.issues.length} pinned</span>`:''}
         </div>
       `:`<span style="font-size:.72rem;color:var(--t3)">· Showing all issues assigned to team members</span>`}
-      <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:.68rem" onclick="openAssignPanel('${curTeamObj.id}')">⚡ ${hasFocus?'Edit':'Set'} Focus</button>
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:.68rem" onclick="adminGuard(()=>openAssignPanel('${curTeamObj.id}'))">⚡ ${hasFocus?'Edit':'Set'} Focus</button>
     </div>`:''}
     <div class="stats">
       <div class="stat"><div class="stat-bg" style="background:var(--a)"></div><span class="stat-ico">📦</span><div class="stat-lbl">Total ${infoBtn('All issues fetched across selected projects, including every status.')}</div><div class="stat-n sv">${total.toLocaleString()}</div><div class="stat-hint">${S.selProj.length} project${S.selProj.length!==1?'s':''}</div></div>
@@ -1784,7 +1817,7 @@ function renderTrackerFocusDash(teamIss, focus, team){
           ${[...selTrackers].map(t=>`<span class="tr-chip on" style="font-size:.6rem;padding:.12rem .5rem;cursor:default">${t}</span>`).join('')}
           ${pinnedIds.size?`<span class="chip" style="font-size:.62rem">${pinnedIds.size} pinned</span>`:''}
         </div>
-        <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:.68rem" onclick="openAssignPanel('${team.id}')">Edit Focus</button>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:.68rem" onclick="adminGuard(()=>openAssignPanel('${team.id}'))">Edit Focus</button>
       </div>
 
       <div class="stats" style="margin-bottom:1rem">
@@ -2224,9 +2257,9 @@ function renderTeamsGrid(){
     <div class="tcard-head">
       <div class="tcard-name">${t.name}</div>
       <div class="tcard-acts">
-        <button class="btn btn-ghost btn-sm" onclick="openAssignPanel('${t.id}')" title="Assign trackers & issues">⚡ Focus</button>
-        <button class="btn btn-ghost btn-sm" onclick="editT('${t.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="delTByIndex(${i})">✕</button>
+        <button class="btn btn-ghost btn-sm" onclick="adminGuard(()=>openAssignPanel('${t.id}'))" title="Assign trackers & issues">⚡ Focus</button>
+        ${isAdmin()?`<button class="btn btn-ghost btn-sm" onclick="editT('${t.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="delTByIndex(${i})">✕</button>`:''}
       </div>
     </div>
     <div style="font-size:.7rem;color:var(--t2);margin-bottom:.6rem">${t.members.length} member${t.members.length!==1?'s':''}</div>
@@ -2247,7 +2280,7 @@ function openModal(eid=null){
   document.getElementById('t-modal').classList.add('on');
 }
 function closeModal(){document.getElementById('t-modal').classList.remove('on');}
-function editT(id){openModal(id);}
+function editT(id){adminGuard(()=>openModal(id));}
 function delTByIndex(i){
   if(i<0||i>=S.teams.length)return;
   const name=S.teams[i].name;
@@ -2437,6 +2470,146 @@ function doDisconnect(){
   document.getElementById('conn-btn').disabled=false;
   document.getElementById('conn-err').style.display='none';
 }
+
+// ── ADMIN / READONLY SYSTEM ──────────────────
+
+// Simple hash (not cryptographic, but fine for this use case)
+async function hashPw(pw){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('vg-salt-'+pw));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function isAdmin(){return sessionStorage.getItem('vg_admin')==='1';}
+
+function applyAdminState(){
+  const admin=isAdmin();
+  const hasPw=!!localStorage.getItem('vg_pw_hash');
+  // Lock btn appearance
+  const btn=document.getElementById('admin-lock-btn');
+  const badge=document.getElementById('viewer-badge');
+  if(btn){
+    if(admin){
+      btn.className='admin-lock-btn unlocked';
+      btn.innerHTML='🔓 Admin';
+      btn.title='Click to lock admin access';
+    } else {
+      btn.className='admin-lock-btn';
+      btn.innerHTML='🔒 '+(hasPw?'Admin':'Set Admin PW');
+      btn.title=hasPw?'Unlock admin access':'Set an admin password';
+    }
+  }
+  if(badge) badge.style.display=admin?'none':'inline-flex';
+  // Show/hide admin-only UI
+  const ids=['new-team-btn'];
+  ids.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.style.display=admin?'':'none';
+  });
+}
+
+// Called by guarded buttons — if admin, run fn; else prompt login
+function adminGuard(fn){
+  if(isAdmin()){fn();return;}
+  openAdminModal('unlock',fn);
+}
+
+let _pendingAdminFn=null;
+function adminLockClick(){
+  if(isAdmin()){
+    // Already admin — lock
+    sessionStorage.removeItem('vg_admin');
+    applyAdminState();
+    toast('Locked — viewer mode');
+  } else {
+    openAdminModal('unlock', null);
+  }
+}
+
+function openAdminModal(mode, pendingFn){
+  _pendingAdminFn=pendingFn||null;
+  const hasPw=!!localStorage.getItem('vg_pw_hash');
+  const overlay=document.getElementById('admin-modal-overlay');
+  const title=document.getElementById('adm-title');
+  const sub=document.getElementById('adm-sub');
+  const setPwWrap=document.getElementById('adm-setpw-wrap');
+  const submitBtn=document.getElementById('adm-submit-btn');
+  document.getElementById('adm-pw-input').value='';
+  document.getElementById('adm-err').textContent='';
+  if(!hasPw){
+    // No password set yet — first time setup
+    title.textContent='🔐 Set Admin Password';
+    sub.textContent='No admin password set yet. Enter a password to protect team edits.';
+    setPwWrap.style.display='block';
+    submitBtn.style.display='none';
+    document.getElementById('adm-new-pw').value='';
+    document.getElementById('adm-new-pw2').value='';
+  } else {
+    title.textContent='🔐 Admin Access';
+    sub.textContent='Enter admin password to unlock editing.';
+    setPwWrap.style.display='none';
+    submitBtn.style.display='';
+  }
+  overlay.style.display='flex';
+  setTimeout(()=>document.getElementById(hasPw?'adm-pw-input':'adm-new-pw').focus(),80);
+}
+
+function closeAdminModal(){
+  document.getElementById('admin-modal-overlay').style.display='none';
+  _pendingAdminFn=null;
+}
+
+async function adminSubmit(){
+  const pw=document.getElementById('adm-pw-input').value;
+  if(!pw){document.getElementById('adm-err').textContent='Enter your password.';return;}
+  const hash=await hashPw(pw);
+  const stored=localStorage.getItem('vg_pw_hash');
+  if(hash===stored){
+    sessionStorage.setItem('vg_admin','1');
+    closeAdminModal();
+    applyAdminState();
+    toast('Admin unlocked ✓');
+    if(_pendingAdminFn){_pendingAdminFn();_pendingAdminFn=null;}
+  } else {
+    document.getElementById('adm-err').textContent='Incorrect password.';
+    document.getElementById('adm-pw-input').select();
+  }
+}
+
+async function adminSetPassword(){
+  const pw=document.getElementById('adm-new-pw').value;
+  const pw2=document.getElementById('adm-new-pw2').value;
+  const err=document.getElementById('adm-err');
+  if(!pw||pw.length<4){err.textContent='Password must be at least 4 characters.';return;}
+  if(pw!==pw2){err.textContent='Passwords do not match.';return;}
+  const hash=await hashPw(pw);
+  localStorage.setItem('vg_pw_hash',hash);
+  sessionStorage.setItem('vg_admin','1');
+  // Also save hash to KV so it persists across devices
+  try{
+    await fetch(`${PROXY}?action=saveTeams`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({teams:S.teams, pw_hash:hash})
+    });
+  }catch(e){}
+  closeAdminModal();
+  applyAdminState();
+  toast('Admin password set ✓ You are now in admin mode.');
+}
+
+// On app start — check if admin password exists in KV, sync to localStorage
+async function syncAdminPw(){
+  try{
+    const r=await fetch(`${PROXY}?action=getTeams`);
+    const d=await r.json();
+    if(d.pw_hash) localStorage.setItem('vg_pw_hash',d.pw_hash);
+  }catch(e){}
+}
+
+// Close modal on overlay click
+document.getElementById('admin-modal-overlay')?.addEventListener('click',function(e){
+  if(e.target===this)closeAdminModal();
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAdminModal();});
 
 // ── HELPERS ───────────────────────────────────
 function sbadge(s){const m={'New':'bn','In Progress':'bp','Resolved':'br','Closed':'bc','Rejected':'bd','Feedback':'bf'};return`<span class="badge ${m[s]||'bn'}">${s||'?'}</span>`;}
