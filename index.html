@@ -1153,8 +1153,19 @@ async function loadAll(){
   const seen=new Set();S.issues=[];
   const rebuildUsers=()=>{
     const m=new Map();
-    S.issues.forEach(i=>{if(i.assigned_to&&!m.has(i.assigned_to.id))m.set(i.assigned_to.id,{id:i.assigned_to.id,firstname:i.assigned_to.name});});
-    S.users=Array.from(m.values());
+    S.issues.forEach(i=>{
+      // Include assignees
+      if(i.assigned_to&&!m.has(i.assigned_to.id))
+        m.set(i.assigned_to.id,{id:i.assigned_to.id,firstname:i.assigned_to.name});
+      // Also include authors/reporters
+      if(i.author&&!m.has(i.author.id))
+        m.set(i.author.id,{id:i.author.id,firstname:i.author.name});
+    });
+    S.users=Array.from(m.values()).sort((a,b)=>a.firstname.localeCompare(b.firstname));
+    // If team modal is open, refresh the member list live
+    if(document.getElementById('t-modal')?.classList.contains('on')){
+      renderMems(document.getElementById('m-search')?.value||'');
+    }
   };
   const merge=arr=>{
     let added=0;
@@ -1325,7 +1336,9 @@ function renderDashTabs(){
 function getIss(tid){
   if(tid==='all')return S.issues;
   const t=S.teams.find(t=>String(t.id)===String(tid));if(!t)return S.issues;
-  const memberIds=new Set(t.members.map(m=>Number(m.id)));
+  // Support both numeric IDs (from Redmine) and string IDs (manually added members)
+  const memberIds=new Set(t.members.map(m=>String(m.id)));
+  const isMember=aid=>memberIds.has(String(aid));
   const focus=t.focus||{trackers:[],issues:[]};
   const hasFocus=focus.trackers.length||focus.issues.length;
   if(hasFocus){
@@ -1334,17 +1347,14 @@ function getIss(tid){
     const result=[];const seen=new Set();
     S.issues.forEach(i=>{
       if(seen.has(i.id))return;
-      const assignedToMember=i.assigned_to&&memberIds.has(Number(i.assigned_to.id));
-      // Tracker filter: only show if assigned to a team member
+      const assignedToMember=i.assigned_to&&isMember(i.assigned_to.id);
       const byTracker=selTrackers.has(i.tracker?.name)&&assignedToMember;
-      // Pinned issue: always show it — workload counted only if assigned to a team member
       const byPin=pinnedIds.has(Number(i.id));
       if(byTracker||byPin){result.push(i);seen.add(i.id);}
     });
     return result;
   }
-  // No focus: all issues assigned to team members
-  return S.issues.filter(i=>i.assigned_to&&memberIds.has(Number(i.assigned_to.id)));
+  return S.issues.filter(i=>i.assigned_to&&isMember(i.assigned_to.id));
 }
 
 let DC={};
@@ -1366,8 +1376,8 @@ function renderDash(){
     sMap[s]=(sMap[s]||0)+1;
     // Workload: only count active issues assigned to actual team members
     if(i.assigned_to&&!['Closed','Rejected'].includes(i.status?.name)){
-      const curT=S.teams.find(t=>t.id==S.curTeam);
-      const isTeamMember=!curT||curT.members.some(m=>Number(m.id)===Number(i.assigned_to.id));
+      const curT=S.teams.find(t=>String(t.id)===String(S.curTeam));
+      const isTeamMember=!curT||curT.members.some(m=>String(m.id)===String(i.assigned_to.id));
       if(isTeamMember){const n=i.assigned_to.name;mMap[n]=(mMap[n]||0)+1;}
     }
   });
@@ -2272,17 +2282,46 @@ function renderMems(f=''){
     selEl.innerHTML='<span style="font-size:.75rem;color:var(--t3);font-style:italic;padding:.1rem .2rem">No members selected</span>';
   }
   // ── BOTTOM: unselected users to add ──
-  const unsel=S.users.filter(u=>!S.selMems.has(u.id)&&(!f||u.firstname.toLowerCase().includes(f.toLowerCase())));
+  const _fq=f.toLowerCase().trim();
+  const unsel=S.users.filter(u=>!S.selMems.has(u.id)&&(!_fq||u.firstname.toLowerCase().split(' ').some(w=>w.startsWith(_fq))||u.firstname.toLowerCase().includes(_fq)));
+  const noMatchHtml=_fq
+    ? `<div style="padding:.7rem .8rem">
+        <div style="font-size:.78rem;color:var(--t3);margin-bottom:.55rem">
+          No match${S.fetching?' <span style="color:var(--warn)">— still loading…</span>':''}
+        </div>
+        <div style="font-size:.72rem;color:var(--t2);margin-bottom:.5rem">
+          Not found? Add <b>${_fq.replace(/</g,'&lt;')}</b> manually — they may have no issues yet.
+        </div>
+        <button class="btn btn-ghost btn-sm" style="font-size:.72rem;width:100%;justify-content:center"
+          onclick="addMemManual()">+ Add &quot;${_fq.replace(/"/g,'&quot;').replace(/</g,'&lt;')}&quot; as member</button>
+      </div>`
+    : '<div class="empty" style="padding:.8rem;font-size:.8rem;color:var(--t3)">All users added</div>';
   document.getElementById('m-list').innerHTML=unsel.map(u=>`
     <div class="mrow" onclick="addMem(${u.id})" title="Add ${u.firstname}">
       <div class="av av-xs" style="background:${CLRS[u.id%CLRS.length]}">${u.firstname.slice(0,2).toUpperCase()}</div>
       <span class="mrow-name">${u.firstname}</span>
       <span class="mrow-cnt">${S.issues.filter(i=>i.assigned_to?.id===u.id).length}</span>
       <span style="margin-left:auto;font-size:.7rem;color:var(--a);font-weight:700;padding:.15rem .45rem;border:1px solid var(--a);border-radius:6px;flex-shrink:0">+ Add</span>
-    </div>`).join('')||`<div class="empty" style="padding:.8rem;font-size:.8rem">${f?'No match':'All users added'}</div>`;
+    </div>`).join('')||noMatchHtml;
 }
 function filterMems(){renderMems(document.getElementById('m-search').value);}
 function addMem(id){S.selMems.add(id);document.getElementById('m-search').value='';renderMems('');}
+function addMemManual(){
+  const inp=document.getElementById('m-search');
+  const name=inp.value.trim();
+  if(!name)return;
+  // Check if already exists under a different search term
+  const existing=S.users.find(u=>u.firstname.toLowerCase()===name.toLowerCase());
+  if(existing){S.selMems.add(existing.id);inp.value='';renderMems('');return;}
+  // Create a synthetic user with a stable negative ID based on name hash
+  const fakeId='__manual__'+name.toLowerCase().replace(/\s+/g,'_');
+  if(!S.users.find(u=>u.id===fakeId)){
+    S.users.push({id:fakeId,firstname:name});
+  }
+  S.selMems.add(fakeId);
+  inp.value='';
+  renderMems('');
+}
 function removeMem(id){S.selMems.delete(id);renderMems(document.getElementById('m-search').value);}
 function togMem(id){if(S.selMems.has(id))S.selMems.delete(id);else S.selMems.add(id);renderMems(document.getElementById('m-search').value);}
 function saveTeam(){
