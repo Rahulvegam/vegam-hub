@@ -656,9 +656,10 @@ function setFetch(on,pct=0,msg=''){
 
 // ── API ─────────────────────────────────────
 async function api(path,params={}){
+  // Worker prepends REDMINE_BASE internally — send only path, not full URL
   const qs=new URLSearchParams({...params,key:S.key}).toString();
-  const t=encodeURIComponent(`${S.url}${path}?${qs}`);
-  const r=await fetch(`${PROXY}?target=${t}`);
+  const t=encodeURIComponent(path+'?'+qs);
+  const r=await fetch(PROXY+'?target='+t);
   if(!r.ok)throw new Error('HTTP '+r.status);
   return r.json();
 }
@@ -674,17 +675,43 @@ async function doConnect(){
   S.url=url;S.key=key;
   btn.textContent='Connecting…';btn.disabled=true;
   setFetch(true,8,'Connecting…');
-  try{
-    // Just verify connection works — no project loading
+
+  // If same credentials as last saved session — skip test ping, go straight in
+  const savedUrl=localStorage.getItem('vg_url');
+  const savedKey=localStorage.getItem('vg_key');
+  if(savedUrl===url&&savedKey===key){
+    setFetch(false);
+    await launchApp();
+    return;
+  }
+
+  // New credentials — verify with test ping, retry once on transient errors
+  const testPing=async()=>{
     const rd=await api('/issues.json',{limit:1});
-    if(!rd||rd.issues===undefined)throw new Error('Invalid response');
+    if(!rd||rd.issues===undefined)throw new Error('Invalid response from Redmine');
+  };
+  try{
+    try{ await testPing(); }
+    catch(e1){
+      setFetch(true,8,'Retrying…');
+      await new Promise(r=>setTimeout(r,2000));
+      await testPing();
+    }
     localStorage.setItem('vg_url',url);
     localStorage.setItem('vg_key',key);
     setFetch(false);
     await launchApp();
   }catch(e){
     setFetch(false);
-    showErr('Failed: '+(e.message||'Check URL and key'));
+    const code=e.message?.match(/\d{3}/)?.[0];
+    if(code==='530'||code==='522'||code==='524')
+      showErr('Redmine is unreachable right now ('+e.message+'). Try again in a moment.');
+    else if(code==='401'||code==='403')
+      showErr('Invalid API key — check your Redmine API key.');
+    else if(code==='404')
+      showErr('Redmine URL not found — check the URL.');
+    else
+      showErr('Connection failed: '+(e.message||'Check URL and key'));
     btn.textContent='Connect →';btn.disabled=false;
   }
 }
