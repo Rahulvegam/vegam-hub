@@ -517,7 +517,7 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
   <div class="modal" style="max-width:420px">
     <div class="modal-body">
       <div class="mtitle">📦 Archive Pinned Issue</div>
-      <div style="font-size:.82rem;color:var(--t2);margin-bottom:1.2rem">This issue will be archived with today's date. You can view and restore it from the Archive tab anytime.</div>
+      <div style="font-size:.82rem;color:var(--t2);margin-bottom:1.2rem">This issue will be archived with today's date. You can view and restore it from the dashboard.</div>
       <div id="arch-issue-preview" style="background:var(--s2);border:1px solid var(--b2);border-radius:10px;padding:.8rem 1rem;margin-bottom:1rem;font-size:.82rem;"></div>
       <div style="display:flex;align-items:center;gap:.6rem;padding:.55rem .9rem;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:10px;font-size:.78rem;color:var(--ok)">
         <span style="font-size:1rem">📅</span>
@@ -543,7 +543,6 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
     <div style="display:flex;gap:.3rem">
       <button id="ap-tab-selected" onclick="apSwitchTab('selected')" class="btn btn-p btn-sm" style="flex:1;justify-content:center">✓ Pinned <span id="ap-sel-badge" style="background:rgba(255,255,255,.25);border-radius:10px;padding:.05rem .4rem;font-size:.65rem;margin-left:.3rem">0</span></button>
       <button id="ap-tab-browse" onclick="apSwitchTab('browse')" class="btn btn-ghost btn-sm" style="flex:1;justify-content:center">🔍 Search & Pin</button>
-      <button id="ap-tab-archive" onclick="apSwitchTab('archive')" class="btn btn-ghost btn-sm" style="flex:1;justify-content:center">📦 Archive</button>
     </div>
   </div>
 
@@ -577,11 +576,6 @@ tr:hover td{background:rgba(99,102,241,.04);color:var(--t1);}
     </div>
   </div>
 
-  <!-- TAB: ARCHIVE -->
-  <div id="ap-pane-archive" style="flex:1;overflow-y:auto;padding:1rem 1.4rem;display:none">
-    <div style="font-size:.72rem;color:var(--t2);margin-bottom:1rem">Issues that were completed and archived from this team's pinned list.</div>
-    <div id="ap-archive-list"><div style="padding:1.5rem;text-align:center;color:var(--t3);font-size:.82rem">No archived issues yet</div></div>
-  </div>
 
   <div style="padding:.9rem 1.4rem;border-top:1px solid var(--b1);position:sticky;bottom:0;background:var(--s1);display:flex;gap:.6rem;justify-content:flex-end;z-index:10">
     <button class="btn btn-ghost btn-sm" onclick="closeAssignPanel()">Cancel</button>
@@ -948,23 +942,42 @@ function renderDash(){
       <div class="stat"><div class="stat-bg" style="background:var(--info)"></div><span class="stat-ico">⚙</span><div class="stat-lbl">In Progress</div><div class="stat-n sv blu">${inP}</div></div>
       <div class="stat"><div class="stat-bg" style="background:var(--ok)"></div><span class="stat-ico">✓</span><div class="stat-lbl">Resolved</div><div class="stat-n sv grn">${res}</div><div class="stat-hint">${iss.length?Math.round(res/iss.length*100):0}% done</div></div>
       <div class="stat"><div class="stat-bg" style="background:var(--danger)"></div><span class="stat-ico">⚠</span><div class="stat-lbl">Overdue</div><div class="stat-n sv red">${od}</div></div>
-      <div class="stat" style="cursor:${archCount?'pointer':'default'}" ${archCount?`onclick="adminGuard(()=>openAssignPanel('${curTeamObj?.id||''}','archive'))"`:''}><div class="stat-bg" style="background:var(--t3)"></div><span class="stat-ico">📦</span><div class="stat-lbl">Archived</div><div class="stat-n sv">${S.curTeam==='all'?S.teams.reduce((a,t)=>a+(t.archive||[]).length,0):archCount}</div><div class="stat-hint">${S.curTeam==='all'?'all teams':'click to view'}</div></div>
+      <div class="stat" style="cursor:${archCount?'pointer':'default'}" ${archCount?`onclick="''"`:''}><div class="stat-bg" style="background:var(--t3)"></div><span class="stat-ico">📦</span><div class="stat-lbl">Archived</div><div class="stat-n sv">${S.curTeam==='all'?S.teams.reduce((a,t)=>a+(t.archive||[]).length,0):archCount}</div><div class="stat-hint">${S.curTeam==='all'?'all teams':'click to view'}</div></div>
     </div>
     <div class="g2">
       <div class="card"><div class="ctitle">Status Breakdown</div><div class="ch" style="height:280px"><canvas id="d-s"></canvas></div></div>
       <div class="card"><div class="ctitle">Member Workload<span class="csub"> (open pinned issues)</span></div><div class="ch" style="height:280px"><canvas id="d-w"></canvas></div></div>
     </div>
-    ${pinnedIssuesList.length?`<div class="card" style="border-color:rgba(99,102,241,.25);margin-bottom:1.2rem">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem">
-        <div class="ctitle" style="color:var(--a);margin-bottom:0">⚡ Pinned Issues
-          <span style="font-weight:400;font-size:.8rem;color:var(--t2)">(${pinnedIssuesList.length}${odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length?' · <span style="color:var(--danger);font-weight:600">'+odList.filter(o=>pinnedIssuesList.some(p=>p.id===o.id)).length+' overdue</span>':''})</span>
+    <div class="card" style="border-color:rgba(99,102,241,.25);margin-bottom:1.2rem">
+      <!-- Tab header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem;flex-wrap:wrap;gap:.5rem">
+        <div style="display:flex;align-items:center;gap:.3rem;background:var(--s2);border-radius:8px;padding:.2rem;border:1px solid var(--b1)">
+          <button id="issues-tab-active" onclick="switchIssuesTab('active')"
+            style="padding:.28rem .85rem;border-radius:6px;font-size:.75rem;font-weight:600;border:none;cursor:pointer;transition:all .15s;background:var(--a);color:#fff;box-shadow:0 1px 4px rgba(99,102,241,.3)">
+            ⚡ Active <span id="active-tab-count" style="font-size:.65rem;opacity:.85">(${pinnedIssuesList.length})</span>
+          </button>
+          <button id="issues-tab-archived" onclick="switchIssuesTab('archived')"
+            style="padding:.28rem .85rem;border-radius:6px;font-size:.75rem;font-weight:600;border:none;cursor:pointer;transition:all .15s;background:transparent;color:var(--t2)">
+            📦 Archived <span id="archived-tab-count" style="font-size:.65rem;opacity:.8">(${archCount})</span>
+          </button>
         </div>
-        <button onclick="refreshPinnedIssues()" title="Re-sync pinned issues from Redmine" style="background:none;border:none;cursor:pointer;padding:.25rem .4rem;border-radius:6px;color:var(--t3);font-size:.9rem;transition:all .15s" id="pinned-refresh-btn" onmouseover="this.style.color='var(--a)'" onmouseout="this.style.color='var(--t3)'">⟳</button>
+        <button onclick="refreshPinnedIssues()" title="Re-sync pinned issues" id="pinned-refresh-btn"
+          style="background:none;border:none;cursor:pointer;padding:.25rem .4rem;border-radius:6px;color:var(--t3);font-size:.9rem;transition:all .15s"
+          onmouseover="this.style.color='var(--a)'" onmouseout="this.style.color='var(--t3)'">⟳</button>
       </div>
-      <div class="tw"><table><thead><tr><th>#</th><th>Title &amp; Tracker</th><th>Assignee</th><th>Due</th><th>Status</th>${S.curTeam!=='all'?'<th>Action</th>':''}</tr></thead>
-      <tbody id="pinned-tbody"></tbody></table></div>
-    </div>`:''}
-    <div id="dash-archive-section"></div>
+      <!-- Active pane -->
+      <div id="issues-pane-active">
+        ${pinnedIssuesList.length
+          ? `<div class="tw"><table><thead><tr><th>#</th><th>Title &amp; Tracker</th><th>Assignee</th><th>Due</th><th>Status</th>${S.curTeam!=='all'?'<th>Archive</th>':''}</tr></thead>
+             <tbody id="pinned-tbody"></tbody></table></div>`
+          : `<div class="empty" style="padding:1.5rem"><div class="empty-ico">📌</div>No pinned issues — use ⚡ Focus to pin issues to this team</div>`
+        }
+      </div>
+      <!-- Archived pane -->
+      <div id="issues-pane-archived" style="display:none">
+        <div id="dash-archive-section"></div>
+      </div>
+    </div>
     ${!pinnedIssuesList.length&&odList.length?`<div class="card" style="border-color:rgba(255,77,109,.2);margin-bottom:1.2rem">
       <div class="ctitle" style="color:var(--danger)">⚠ Overdue Issues (${odList.length})</div>
       <div class="tw"><table><thead><tr><th>#</th><th>Title</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead>
@@ -978,7 +991,11 @@ function renderDash(){
     </div>`:''}`;
 
   renderPinnedTable(pinnedIssuesList);
-  renderDashArchive(curTeamObj);
+  // Restore tab state — default to active tab, or keep current if re-rendering
+  const currentTab=window._issuesTab||'active';
+  // Reset to active tab on team switch
+  if(window._lastDashTeam!==S.curTeam){window._issuesTab='active';window._lastDashTeam=S.curTeam;}
+  switchIssuesTab(window._issuesTab||'active');
 
   const tc=getCSS('--t1'),t3=getCSS('--t3');
   setTimeout(()=>{
@@ -1021,6 +1038,30 @@ function renderPinnedTable(list){
   }).join('');
 }
 
+// ── ISSUES TAB SWITCHER ─────────────────────
+function switchIssuesTab(tab){
+  window._issuesTab=tab;
+  const activePane=document.getElementById('issues-pane-active');
+  const archPane=document.getElementById('issues-pane-archived');
+  const activeBtn=document.getElementById('issues-tab-active');
+  const archBtn=document.getElementById('issues-tab-archived');
+  if(!activePane||!archPane)return;
+  if(tab==='active'){
+    activePane.style.display='block';
+    archPane.style.display='none';
+    if(activeBtn){activeBtn.style.background='var(--a)';activeBtn.style.color='#fff';activeBtn.style.boxShadow='0 1px 4px rgba(99,102,241,.3)';}
+    if(archBtn){archBtn.style.background='transparent';archBtn.style.color='var(--t2)';archBtn.style.boxShadow='none';}
+  } else {
+    activePane.style.display='none';
+    archPane.style.display='block';
+    if(archBtn){archBtn.style.background='var(--a)';archBtn.style.color='#fff';archBtn.style.boxShadow='0 1px 4px rgba(99,102,241,.3)';}
+    if(activeBtn){activeBtn.style.background='transparent';activeBtn.style.color='var(--t2)';activeBtn.style.boxShadow='none';}
+    // Render archive content when tab is first opened
+    const curTeamObj=S.teams.find(t=>String(t.id)===String(S.curTeam));
+    renderDashArchive(S.curTeam==='all'?null:curTeamObj);
+  }
+}
+
 // ── DASHBOARD ARCHIVE SECTION ───────────────
 // Renders archived issues inline on the dashboard, below pinned issues.
 // Shows per-team archive when a team is selected, or all teams when 'all'.
@@ -1031,20 +1072,22 @@ function renderDashArchive(teamObj){
   // Collect archive entries
   let entries=[];
   if(!teamObj){
-    // All teams view — aggregate all archives
     S.teams.forEach(t=>{
       (t.archive||[]).forEach(a=>entries.push({...a,teamName:t.name,teamColor:t.color,teamId:t.id}));
     });
-  } else {
+  }else{
     (teamObj.archive||[]).forEach(a=>entries.push({...a,teamName:teamObj.name,teamColor:teamObj.color,teamId:teamObj.id}));
   }
 
-  if(!entries.length){el.innerHTML='';return;}
+  if(!entries.length){
+    el.innerHTML=`<div class="empty" style="padding:1.5rem"><div class="empty-ico">📦</div>No archived issues yet<div style="font-size:.75rem;color:var(--t3);margin-top:.4rem">Archive completed pinned issues using the 📦 button in the Active tab</div></div>`;
+    return;
+  }
 
   // Sort newest first
   entries.sort((a,b)=>new Date(b.archivedAt)-new Date(a.archivedAt));
 
-  // Group by label (date)
+  // Group by label/date
   const groups={};
   entries.forEach(a=>{
     const k=a.label||new Date(a.archivedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
@@ -1052,66 +1095,48 @@ function renderDashArchive(teamObj){
     groups[k].push(a);
   });
 
-  const isCollapsed=window._archSectionCollapsed;
+  const showTeamCol=!teamObj;
 
-  el.innerHTML=`
-    <div class="card" style="border-color:rgba(107,114,128,.2);margin-bottom:1.2rem">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${isCollapsed?'0':'.8rem'};flex-wrap:wrap;gap:.5rem">
-        <div style="display:flex;align-items:center;gap:.6rem;cursor:pointer" onclick="toggleDashArchive()">
-          <span style="font-size:.82rem;font-weight:700;color:var(--t2)">📦 Archived Issues</span>
-          <span style="font-size:.72rem;color:var(--t3);font-family:'JetBrains Mono',monospace">(${entries.length})</span>
-          <span style="font-size:.7rem;color:var(--t3);transition:transform .2s;display:inline-block;transform:rotate(${isCollapsed?'0':'90'}deg)">▶</span>
-        </div>
-        ${!teamObj?'':`<button class="btn btn-ghost btn-sm" style="font-size:.65rem" onclick="adminGuard(()=>openAssignPanel('${teamObj.id}','archive'))">Manage →</button>`}
+  el.innerHTML=Object.entries(groups).map(([label,items])=>`
+    <div style="margin-bottom:1rem">
+      <div style="font-size:.68rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:.4rem;padding:.18rem .55rem;background:var(--s2);border-radius:6px;display:inline-block;border:1px solid var(--b1)">
+        ${label} · ${items.length} issue${items.length!==1?'s':''}
       </div>
-      ${isCollapsed?'':`
-      <div>
-        ${Object.entries(groups).map(([label,items])=>`
-          <div style="margin-bottom:.85rem">
-            <div style="font-size:.68rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:.4rem;padding:.2rem .4rem;background:var(--s2);border-radius:6px;display:inline-block">${label} · ${items.length} issue${items.length!==1?'s':''}</div>
-            <div class="tw">
-              <table>
-                <thead><tr>
-                  <th>#</th>
-                  <th>Title &amp; Tracker</th>
-                  <th>Assignee</th>
-                  <th>Archived</th>
-                  <th>Status</th>
-                  ${!teamObj?'<th>Team</th>':''}
-                  <th>Action</th>
-                </tr></thead>
-                <tbody>
-                  ${items.map(a=>`<tr style="opacity:.8">
-                    <td><a href="${S.url}/issues/${a.id}" target="_blank" style="color:var(--a);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.72rem">#${a.id}</a></td>
-                    <td style="color:var(--t1)">
-                      ${a.tracker?`<span style="font-size:.6rem;font-weight:700;padding:.1rem .4rem;border-radius:4px;background:var(--s3);color:var(--t2);border:1px solid var(--b2);margin-right:.4rem">${a.tracker}</span>`:''}
-                      ${a.subject.slice(0,50)}${a.subject.length>50?'…':''}
-                    </td>
-                    <td style="font-size:.75rem">${a.assignee||'<span style="color:var(--t3)">—</span>'}</td>
-                    <td style="font-size:.68rem;color:var(--t3);font-family:'JetBrains Mono',monospace">${new Date(a.archivedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</td>
-                    <td>${sbadge(a.status)}</td>
-                    ${!teamObj?`<td><span style="font-size:.65rem;font-weight:600;padding:.12rem .45rem;border-radius:20px;background:${a.teamColor}18;color:${a.teamColor};border:1px solid ${a.teamColor}44">${a.teamName}</span></td>`:''}
-                    <td>
-                      <button onclick="restoreArchived(${a.id},'${a.teamId}')" 
-                        style="background:none;border:1px solid var(--b2);color:var(--t3);border-radius:6px;padding:.18rem .55rem;cursor:pointer;font-size:.65rem;font-weight:600;transition:all .15s;white-space:nowrap"
-                        onmouseover="this.style.borderColor='var(--ok)';this.style.color='var(--ok)'"
-                        onmouseout="this.style.borderColor='var(--b2)';this.style.color='var(--t3)'">↩ Restore</button>
-                    </td>
-                  </tr>`).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        `).join('')}
-      </div>`}
-    </div>`;
+      <div class="tw">
+        <table>
+          <thead><tr>
+            <th>#</th>
+            <th>Title &amp; Tracker</th>
+            <th>Assignee</th>
+            <th>Archived</th>
+            <th>Status</th>
+            ${showTeamCol?'<th>Team</th>':''}
+            <th>Restore</th>
+          </tr></thead>
+          <tbody>
+            ${items.map(a=>`<tr style="opacity:.75">
+              <td><a href="${S.url}/issues/${a.id}" target="_blank" style="color:var(--a);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:.72rem">#${a.id}</a></td>
+              <td style="color:var(--t1)">
+                ${a.tracker?`<span style="font-size:.6rem;font-weight:700;padding:.1rem .4rem;border-radius:4px;background:var(--s3);color:var(--t2);border:1px solid var(--b2);margin-right:.35rem">${a.tracker}</span>`:''}
+                ${a.subject.slice(0,52)}${a.subject.length>52?'…':''}
+              </td>
+              <td style="font-size:.75rem">${a.assignee||'<span style="color:var(--t3)">—</span>'}</td>
+              <td style="font-size:.68rem;color:var(--t3);font-family:'JetBrains Mono',monospace">${new Date(a.archivedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</td>
+              <td>${sbadge(a.status)}</td>
+              ${showTeamCol?`<td><span style="font-size:.65rem;font-weight:600;padding:.12rem .45rem;border-radius:20px;background:${a.teamColor}18;color:${a.teamColor};border:1px solid ${a.teamColor}44">${a.teamName}</span></td>`:''}
+              <td>
+                <button onclick="restoreArchived(${a.id},'${a.teamId}')"
+                  style="background:none;border:1px solid var(--b2);color:var(--t3);border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.65rem;font-weight:600;transition:all .15s;white-space:nowrap"
+                  onmouseover="this.style.borderColor='var(--ok)';this.style.color='var(--ok)'"
+                  onmouseout="this.style.borderColor='var(--b2)';this.style.color='var(--t3)'">↩ Restore</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`).join('');
 }
 
-function toggleDashArchive(){
-  window._archSectionCollapsed=!window._archSectionCollapsed;
-  const curTeamObj=S.teams.find(t=>String(t.id)===String(S.curTeam));
-  renderDashArchive(S.curTeam==='all'?null:curTeamObj);
-}
 
 async function refreshPinnedIssues(){
   const btn=document.getElementById('pinned-refresh-btn');
@@ -1394,7 +1419,7 @@ function renderCal(){
 // ── FOCUS PANEL ─────────────────────────────
 let _assignTeamId=null,_apSelTrackers=new Set(),_apSelIssues=new Set();
 
-function openAssignPanel(tid,defaultTab){
+function openAssignPanel(tid){
   _assignTeamId=tid;
   const team=S.teams.find(t=>String(t.id)===String(tid));
   if(!team)return;
@@ -1408,7 +1433,7 @@ function openAssignPanel(tid,defaultTab){
   // Tracker chips from known issues + trackers
   renderAPTrackerChips();
   // Default tab
-  apSwitchTab(defaultTab||(_apSelTrackers.size||_apSelIssues.size?'selected':'browse'));
+  apSwitchTab(_apSelTrackers.size||_apSelIssues.size?'selected':'browse');
   renderAPSelected();
   renderArchiveTab();
 }
@@ -1423,15 +1448,12 @@ function closeAssignPanel(){
 let _apCurTab='selected';
 function apSwitchTab(tab){
   _apCurTab=tab;
-  ['selected','browse','archive'].forEach(t=>{
-    document.getElementById('ap-pane-'+t).style.display=t===tab?'flex':'none';
+  ['selected','browse'].forEach(t=>{
+    const pane=document.getElementById('ap-pane-'+t);
+    if(pane)pane.style.display=t===tab?'block':'none';
     const btn=document.getElementById('ap-tab-'+t);
     if(btn){btn.className=t===tab?'btn btn-p btn-sm':'btn btn-ghost btn-sm';btn.style.flex='1';btn.style.justifyContent='center';}
   });
-  // Fix — selected pane uses block not flex
-  if(tab==='selected')document.getElementById('ap-pane-selected').style.display='block';
-  if(tab==='browse')document.getElementById('ap-pane-browse').style.display='block';
-  if(tab==='archive'){document.getElementById('ap-pane-archive').style.display='block';renderArchiveTab();}
   const badge=document.getElementById('ap-sel-badge');
   if(badge)badge.textContent=_apSelTrackers.size+_apSelIssues.size;
 }
@@ -1487,36 +1509,6 @@ function renderAPSelected(){
   if(badge)badge.textContent=_apSelTrackers.size+_apSelIssues.size;
 }
 
-function renderArchiveTab(){
-  const el=document.getElementById('ap-archive-list');
-  if(!el)return;
-  const team=S.teams.find(t=>String(t.id)===String(_assignTeamId));
-  const arch=(team?.archive||[]).slice().reverse(); // newest first
-  if(!arch.length){
-    el.innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--t3);font-size:.82rem">No archived issues yet. When you archive a pinned issue it will appear here.</div>';
-    return;
-  }
-  // Group by label
-  const groups={};
-  arch.forEach(a=>{const k=a.label||'Unlabelled';if(!groups[k])groups[k]=[];groups[k].push(a);});
-  el.innerHTML=Object.entries(groups).map(([label,items])=>`
-    <div style="margin-bottom:1rem">
-      <div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .9rem;background:var(--s2);border-radius:8px 8px 0 0;border:1px solid var(--b1);border-bottom:none">
-        <span style="font-size:.72rem;font-weight:700;color:var(--t1)">📦 ${label}</span>
-        <span style="font-size:.65rem;color:var(--t3);margin-left:auto">${items.length} issue${items.length!==1?'s':''}</span>
-      </div>
-      <div style="border:1px solid var(--b1);border-radius:0 0 8px 8px;overflow:hidden">
-        ${items.map(a=>`<div style="display:flex;align-items:center;gap:.6rem;padding:.5rem .9rem;border-bottom:1px solid var(--b1)">
-          <a href="${S.url}/issues/${a.id}" target="_blank" style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--a);text-decoration:none;flex-shrink:0">#${a.id}</a>
-          ${a.tracker?`<span class="chip" style="font-size:.58rem">${a.tracker}</span>`:''}
-          <div style="flex:1;min-width:0;font-size:.78rem;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.subject}</div>
-          ${sbadge(a.status)}
-          <span style="font-size:.62rem;color:var(--t3);flex-shrink:0">${new Date(a.archivedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
-          <button onclick="restoreArchived(${a.id},'${_assignTeamId}')" title="Restore to pinned" style="flex-shrink:0;background:none;border:1px solid var(--b2);color:var(--t3);border-radius:6px;padding:.18rem .45rem;cursor:pointer;font-size:.65rem;transition:all .15s" onmouseover="this.style.borderColor='var(--ok)';this.style.color='var(--ok)'" onmouseout="this.style.borderColor='var(--b2)';this.style.color='var(--t3)'">↩ Restore</button>
-        </div>`).join('')}
-      </div>
-    </div>`).join('');
-}
 
 function restoreArchived(issueId,teamId){
   const team=S.teams.find(t=>String(t.id)===String(teamId));
@@ -1528,9 +1520,12 @@ function restoreArchived(issueId,teamId){
   _apSelIssues.add(Number(issueId));
   saveTeams();
   renderAPSelected();
-  renderArchiveTab();
-  // Also refresh dashboard archive section if visible
-  if(document.getElementById('s-dash')?.classList.contains('on')) renderDash();
+  // Refresh dashboard and stay on archived tab
+  if(document.getElementById('s-dash')?.classList.contains('on')){
+    renderDash();
+    // Stay on archived tab after restoring
+    setTimeout(()=>switchIssuesTab('archived'),50);
+  }
   toast(`↩ Issue #${issueId} restored to pinned`);
   // Fetch the issue if not in memory
   if(!S.issues.find(i=>Number(i.id)===Number(issueId))){
@@ -1688,7 +1683,7 @@ function renderTeamsGrid(){
         ${focus.trackers.map(tr=>`<span class="tr-chip on" style="font-size:.6rem;padding:.1rem .45rem;cursor:default">${tr}</span>`).join('')}
         ${focus.issues.length?`<span class="chip" style="font-size:.62rem">${focus.issues.length} pinned</span>`:''}
       </div>`:''}
-      ${archCount?`<div style="padding-top:.3rem"><span class="arch-badge" style="cursor:pointer" onclick="adminGuard(()=>openAssignPanel('${t.id}','archive'))">📦 ${archCount} archived</span></div>`:''}
+      ${archCount?`<div style="padding-top:.3rem"><span class="arch-badge" style="cursor:pointer" onclick="switchTeam('${t.id}')">📦 ${archCount} archived</span></div>`:''}
     </div>`;
   }).join('');
 }
