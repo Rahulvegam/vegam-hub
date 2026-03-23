@@ -1510,9 +1510,18 @@ function renderAPSelected(){
 }
 
 
-function restoreArchived(issueId,teamId){
+async function restoreArchived(issueId,teamId){
   const team=S.teams.find(t=>String(t.id)===String(teamId));
   if(!team)return;
+
+  // Fetch issue first if not already in memory — must happen BEFORE renderDash
+  if(!S.issues.find(i=>Number(i.id)===Number(issueId))){
+    try{
+      const d=await api('/issues/'+issueId+'.json',{});
+      if(d.issue){S.issues.push(d.issue);rebuildUsersFromIssues();}
+    }catch(e){console.warn('Could not fetch issue',issueId,e);}
+  }
+
   // Move back to pinned
   if(!team.focus)team.focus={trackers:[],issues:[]};
   if(!team.focus.issues.includes(Number(issueId)))team.focus.issues.push(Number(issueId));
@@ -1520,17 +1529,14 @@ function restoreArchived(issueId,teamId){
   _apSelIssues.add(Number(issueId));
   saveTeams();
   renderAPSelected();
-  // Refresh dashboard and stay on archived tab
+
+  // Re-render dashboard — issue is now in S.issues so Active tab shows it immediately
   if(document.getElementById('s-dash')?.classList.contains('on')){
     renderDash();
-    // Stay on archived tab after restoring
+    // Stay on archived tab so user can continue restoring others
     setTimeout(()=>switchIssuesTab('archived'),50);
   }
   toast(`↩ Issue #${issueId} restored to pinned`);
-  // Fetch the issue if not in memory
-  if(!S.issues.find(i=>Number(i.id)===Number(issueId))){
-    api('/issues/'+issueId+'.json',{}).then(d=>{if(d.issue){S.issues.push(d.issue);rebuildUsersFromIssues();}}).catch(()=>{});
-  }
 }
 
 function apRemoveTracker(name){_apSelTrackers.delete(name);renderAPSelected();renderAPTrackerChips();}
